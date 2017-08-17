@@ -103,12 +103,13 @@ describe("PipelineConfigWidget", () => {
   });
 
   it("should render the pipeline name", () => {
-    expect($root.find('.pipeline .heading h1')).toHaveText('Pipeline configuation for pipeline yourproject');
+    expect($root.find('.pipeline .heading h1')).toHaveText('Pipeline configuration for pipeline yourproject');
   });
 
   it('should disable button and page edits while pipeline config save is in progress', () => {
     jasmine.Ajax.withMock(() => {
-      jasmine.Ajax.stubRequest('/go/api/admin/pipelines/yourproject', undefined, 'PATCH');
+      jasmine.Ajax.stubRequest('/go/api/admin/pipelines/yourproject', undefined, 'PUT');
+
       const saveButton   = $root.find('button.save-pipeline');
       const pipelineBody = $root.find('.pipeline-body');
 

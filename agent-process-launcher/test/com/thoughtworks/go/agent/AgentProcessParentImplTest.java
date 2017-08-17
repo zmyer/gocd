@@ -19,18 +19,13 @@ package com.thoughtworks.go.agent;
 import com.googlecode.junit.ext.checkers.OSChecker;
 import com.thoughtworks.go.agent.common.AgentBootstrapperArgs;
 import com.thoughtworks.go.agent.common.util.Downloader;
-import com.thoughtworks.go.agent.common.util.LoggingHelper;
-import com.thoughtworks.go.agent.testhelper.FakeBootstrapperServer;
+import com.thoughtworks.go.agent.testhelper.FakeGoServer;
 import com.thoughtworks.go.mothers.ServerUrlGeneratorMother;
 import com.thoughtworks.go.util.LogFixture;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Level;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.*;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
@@ -39,7 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static com.thoughtworks.go.agent.common.util.Downloader.*;
-import static com.thoughtworks.go.agent.testhelper.FakeBootstrapperServer.TestResource.*;
+import static com.thoughtworks.go.agent.testhelper.FakeGoServer.TestResource.*;
 import static com.thoughtworks.go.util.DataStructureUtils.m;
 import static com.thoughtworks.go.util.LogFixture.logFixtureFor;
 import static java.lang.System.getProperty;
@@ -49,8 +44,10 @@ import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.*;
 
-@RunWith(FakeBootstrapperServer.class)
 public class AgentProcessParentImplTest {
+
+    @Rule
+    public FakeGoServer server = new FakeGoServer();
 
     private static final OSChecker OS_CHECKER = new OSChecker(OSChecker.WINDOWS);
     private final File stderrLog = new File(AgentProcessParentImpl.GO_AGENT_STDERR_LOG);
@@ -58,7 +55,6 @@ public class AgentProcessParentImplTest {
 
     @BeforeClass
     public static void setup() {
-        System.setProperty(LoggingHelper.LOG_DIR, ".");
         System.setProperty("sleep.for.download", "10");
     }
 
@@ -101,7 +97,7 @@ public class AgentProcessParentImplTest {
                 "-jar",
                 "agent.jar",
                 "-serverUrl",
-                "https://localhost:9091/go/",
+                "https://localhost:" + server.getSecurePort() + "/go/",
                 "-sslVerificationMode",
                 "NONE",
                 "-rootCertFile",
@@ -145,7 +141,7 @@ public class AgentProcessParentImplTest {
                 "-jar",
                 "agent.jar",
                 "-serverUrl",
-                "https://localhost:9091/go/",
+                "https://localhost:" + server.getSecurePort() +"/go/",
                 "-sslVerificationMode",
                 "NONE",
                 "-rootCertFile",
@@ -289,6 +285,6 @@ public class AgentProcessParentImplTest {
     }
 
     private ServerUrlGenerator getURLGenerator() {
-        return ServerUrlGeneratorMother.generatorFor("localhost", 9090);
+        return ServerUrlGeneratorMother.generatorFor("localhost", server.getPort());
     }
 }

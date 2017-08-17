@@ -47,6 +47,7 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
+import java.util.UUID;
 
 import static com.thoughtworks.go.config.PipelineConfigs.DEFAULT_GROUP;
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
@@ -285,6 +286,12 @@ public class GoConfigFileHelper {
         PipelineConfig pipelineConfig = goConfigMother.addPipelineWithGroupAndTimer(cruiseConfig, groupName, pipelineName, materialConfigs, stageName, timer, buildNames);
         writeConfigFile(cruiseConfig);
         return pipelineConfig;
+    }
+
+    public void addSecurityAuthConfig(SecurityAuthConfig securityAuthConfig) {
+        CruiseConfig config = loadForEdit();
+        config.server().security().securityAuthConfigs().add(securityAuthConfig);
+        writeConfigFile(config);
     }
 
     public interface Updater<T>{
@@ -613,6 +620,11 @@ public class GoConfigFileHelper {
         return passwordFile;
     }
 
+    public void enableSecurity() throws IOException {
+        addSecurityAuthConfig(new SecurityAuthConfig(UUID.randomUUID().toString(), "plugin_id"));
+    }
+
+    @Deprecated
     public File turnOnSecurity() throws IOException {
         return addSecurityWithPasswordFile();
     }
@@ -624,8 +636,8 @@ public class GoConfigFileHelper {
     }
 
     public void addSecurityWithAdminConfig() throws Exception {
-        addLdapSecurityWith(new LdapConfig(new GoCipher()), true, new PasswordFileConfig(addPasswordFile().getAbsolutePath()),
-                new AdminsConfig(new AdminUser(new CaseInsensitiveString("admin1"))));
+        enableSecurity();
+        addAdmins("admin1");
     }
 
     private File addPasswordFile() throws IOException {

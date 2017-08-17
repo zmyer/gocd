@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 package com.thoughtworks.go.server.controller;
 
-import com.thoughtworks.go.domain.ConsoleOut;
+import com.thoughtworks.go.domain.ConsoleConsumer;
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.domain.exception.IllegalArtifactLocationException;
 import com.thoughtworks.go.server.cache.ZipArtifactCache;
@@ -34,7 +34,9 @@ import com.thoughtworks.go.server.web.ResponseCodeView;
 import com.thoughtworks.go.util.ArtifactLogUtil;
 import com.thoughtworks.go.util.SystemEnvironment;
 import org.apache.commons.io.IOUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,7 +49,6 @@ import org.springframework.web.servlet.ModelAndView;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -60,15 +61,15 @@ import static javax.servlet.http.HttpServletResponse.SC_NOT_FOUND;
 
 @Controller
 public class ArtifactsController {
-    private ArtifactsService artifactsService;
-    private RestfulService restfulService;
+    private static final Logger LOGGER = LoggerFactory.getLogger(ArtifactsController.class);
 
-    private static final Logger LOGGER = Logger.getLogger(ArtifactsController.class);
     private final ConsoleActivityMonitor consoleActivityMonitor;
-    private ConsoleService consoleService;
     private final ArtifactFolderViewFactory folderViewFactory;
     private final ArtifactFolderViewFactory jsonViewFactory;
     private final ArtifactFolderViewFactory zipViewFactory;
+    private ArtifactsService artifactsService;
+    private RestfulService restfulService;
+    private ConsoleService consoleService;
     private HeaderConstraint headerConstraint;
 
     @Autowired
@@ -87,7 +88,7 @@ public class ArtifactsController {
 
 
     /* RESTful URLs */
-    @RequestMapping("/repository/restful/artifact/GET/html")
+    @RequestMapping(value = "/repository/restful/artifact/GET/html", method = RequestMethod.GET)
     public ModelAndView getArtifactAsHtml(@RequestParam("pipelineName") String pipelineName,
                                           @RequestParam("pipelineLabel") String counterOrLabel,
                                           @RequestParam("stageName") String stageName,
@@ -99,7 +100,7 @@ public class ArtifactsController {
         return getArtifact(filePath, folderViewFactory, pipelineName, counterOrLabel, stageName, stageCounter, buildName, sha, serverAlias);
     }
 
-    @RequestMapping("/repository/restful/artifact/GET/json")
+    @RequestMapping(value = "/repository/restful/artifact/GET/json", method = RequestMethod.GET)
     public ModelAndView getArtifactAsJson(@RequestParam("pipelineName") String pipelineName,
                                           @RequestParam("pipelineLabel") String counterOrLabel,
                                           @RequestParam("stageName") String stageName,
@@ -111,7 +112,7 @@ public class ArtifactsController {
         return getArtifact(filePath, jsonViewFactory, pipelineName, counterOrLabel, stageName, stageCounter, buildName, sha, null);
     }
 
-    @RequestMapping("/repository/restful/artifact/GET/zip")
+    @RequestMapping(value = "/repository/restful/artifact/GET/zip", method = RequestMethod.GET)
     public ModelAndView getArtifactAsZip(@RequestParam("pipelineName") String pipelineName,
                                          @RequestParam("pipelineLabel") String counterOrLabel,
                                          @RequestParam("stageName") String stageName,
@@ -123,12 +124,12 @@ public class ArtifactsController {
         return getArtifact(filePath, zipViewFactory, pipelineName, counterOrLabel, stageName, stageCounter, buildName, sha, null);
     }
 
-    @RequestMapping("/repository/restful/artifact/GET/*")
+    @RequestMapping(value = "/repository/restful/artifact/GET/*", method = RequestMethod.GET)
     public void fetch(HttpServletRequest request, HttpServletResponse response) throws Exception {
         request.getRequestDispatcher("/repository/restful/artifact/GET/html").forward(request, response);
     }
 
-    @RequestMapping("/repository/restful/artifact/POST/*")
+    @RequestMapping(value = "/repository/restful/artifact/POST/*", method = RequestMethod.POST)
     public ModelAndView postArtifact(@RequestParam("pipelineName") String pipelineName,
                                      @RequestParam("pipelineLabel") String counterOrLabel,
                                      @RequestParam("stageName") String stageName,
@@ -139,7 +140,7 @@ public class ArtifactsController {
                                      @RequestParam(value = "attempt", required = false) Integer attempt,
                                      MultipartHttpServletRequest request) throws Exception {
         JobIdentifier jobIdentifier;
-        if(!headerConstraint.isSatisfied(request)) {
+        if (!headerConstraint.isSatisfied(request)) {
             return ResponseCodeView.create(HttpServletResponse.SC_BAD_REQUEST, "Missing required header 'Confirm'");
         }
         try {
@@ -191,7 +192,7 @@ public class ArtifactsController {
                 return artifactsService.saveOrAppendFile(checksumFile, checksumMultipartFile.getInputStream());
             }
         } else {
-            LOGGER.warn(String.format("[Artifacts Upload] Checksum file not uploaded for artifact at path '%s'", filePath));
+            LOGGER.warn("[Artifacts Upload] Checksum file not uploaded for artifact at path '{}'", filePath);
         }
         return true;
     }
@@ -208,7 +209,7 @@ public class ArtifactsController {
         return success;
     }
 
-    @RequestMapping("/repository/restful/artifact/PUT/*")
+    @RequestMapping(value = "/repository/restful/artifact/PUT/*", method = RequestMethod.PUT)
     public ModelAndView putArtifact(@RequestParam("pipelineName") String pipelineName,
                                     @RequestParam("pipelineLabel") String counterOrLabel,
                                     @RequestParam("stageName") String stageName,
@@ -245,17 +246,13 @@ public class ArtifactsController {
                                    @RequestParam("stageName") String stageName,
                                    @RequestParam("buildName") String buildName,
                                    @RequestParam(value = "stageCounter", required = false) String stageCounter,
-                                   @RequestParam(value = "startLineNumber", required = false) Integer start
+                                   @RequestParam(value = "startLineNumber", required = false) Long start
     ) throws Exception {
+        start = start == null ? 0L : start;
 
-        int startLine = start == null ? 0 : start;
-        try {
-            JobIdentifier identifier = restfulService.findJob(pipelineName, counterOrLabel, stageName, stageCounter,
-                    buildName);
-            ConsoleOut consoleOut = consoleService.getConsoleOut(identifier, startLine);
-            return new ModelAndView(new ConsoleOutView(consoleOut.calculateNextStart(), consoleOut.output()));
-        } catch (FileNotFoundException e) {
-            return new ModelAndView(new ConsoleOutView(0, ""));
+        try (ConsoleConsumer streamer = consoleService.getStreamer(start, restfulService.findJob(pipelineName, counterOrLabel, stageName, stageCounter,
+                buildName))) {
+            return new ModelAndView(new ConsoleOutView(streamer));
         } catch (Exception e) {
             return buildNotFound(pipelineName, counterOrLabel, stageName, stageCounter, buildName);
         }
@@ -270,7 +267,7 @@ public class ArtifactsController {
     }
 
     ModelAndView getArtifact(String filePath, ArtifactFolderViewFactory folderViewFactory, String pipelineName, String counterOrLabel, String stageName, String stageCounter, String buildName, String sha, String serverAlias) throws Exception {
-        LOGGER.info(String.format("[Artifact Download] Trying to resolve '%s' for '%s/%s/%s/%s/%s'", filePath, pipelineName, counterOrLabel, stageName, stageCounter, buildName));
+        LOGGER.info("[Artifact Download] Trying to resolve '{}' for '{}/{}/{}/{}/{}'", filePath, pipelineName, counterOrLabel, stageName, stageCounter, buildName);
         long before = System.currentTimeMillis();
         ArtifactsView view;
         //Work out the job that we are trying to retrieve
@@ -288,8 +285,7 @@ public class ArtifactsController {
         view = new LocalArtifactsView(folderViewFactory, artifactsService, translatedId, consoleService);
 
         ModelAndView createdView = view.createView(filePath, sha);
-        LOGGER.info(String.format("[Artifact Download] Successfully resolved '%s' for '%s/%s/%s/%s/%s'. It took: %sms", filePath, pipelineName, counterOrLabel, stageName, stageCounter, buildName,
-                System.currentTimeMillis() - before));
+        LOGGER.info("[Artifact Download] Successfully resolved '{}' for '{}/{}/{}/{}/{}'. It took: {}ms", filePath, pipelineName, counterOrLabel, stageName, stageCounter, buildName, System.currentTimeMillis() - before);
         return createdView;
     }
 

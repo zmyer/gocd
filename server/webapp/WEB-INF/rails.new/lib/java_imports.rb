@@ -87,6 +87,8 @@ module JavaImports
   java_import com.thoughtworks.go.config.PipelineConfigs unless defined? PipelineConfigs
   java_import com.thoughtworks.go.config.BasicPipelineConfigs unless defined? BasicPipelineConfigs
   java_import com.thoughtworks.go.config.PipelineConfig unless defined? PipelineConfig
+  java_import com.thoughtworks.go.domain.NotificationFilter unless defined? NotificationFilter
+  java_import com.thoughtworks.go.domain.exception.UncheckedValidationException unless defined? UncheckedValidationException
   java_import com.thoughtworks.go.domain.PipelineGroups unless defined? PipelineGroups
   java_import com.thoughtworks.go.domain.PipelineDependencyGraphOld unless defined? PipelineDependencyGraphOld
   java_import com.thoughtworks.go.domain.valuestreammap.ValueStreamMap unless defined? ValueStreamMap
@@ -100,6 +102,7 @@ module JavaImports
   java_import com.thoughtworks.go.config.StageConfig unless defined? StageConfig
   java_import com.thoughtworks.go.domain.StageIdentifier unless defined? StageIdentifier
   java_import com.thoughtworks.go.domain.StageIdentifier unless defined? StageIdentifier
+  java_import com.thoughtworks.go.domain.StageEvent unless defined? StageEvent
   java_import com.thoughtworks.go.domain.StageResult unless defined? StageResult
   java_import com.thoughtworks.go.domain.StageState unless defined? StageState
   java_import com.thoughtworks.go.domain.Stages unless defined? Stages
@@ -255,4 +258,17 @@ module JavaImports
   java_import com.thoughtworks.go.server.ui.TemplatesViewModel unless defined? TemplatesViewModel
   java_import com.thoughtworks.go.config.remote.RepoConfigOrigin unless defined? RepoConfigOrigin
   java_import com.thoughtworks.go.config.remote.FileConfigOrigin unless defined? FileConfigOrigin
+  java_import com.thoughtworks.go.config.remote.ConfigRepoConfig unless defined? ConfigRepoConfig
+  java_import com.thoughtworks.go.config.PluginRoleConfig unless defined? PluginRoleConfig
+  java_import com.thoughtworks.go.config.RoleConfig unless defined? RoleConfig
+  java_import com.thoughtworks.go.config.RoleUser unless defined? RoleUser
+  java_import com.thoughtworks.go.config.SecurityAuthConfig unless defined? SecurityAuthConfig
+  java_import com.thoughtworks.go.plugin.access.authorization.models.Capabilities unless defined? Capabilities
+  java_import com.thoughtworks.go.plugin.access.authorization.models.SupportedAuthType unless defined? SupportedAuthType
+  java_import com.thoughtworks.go.plugin.domain.common.VerifyConnectionResponse unless defined? VerifyConnectionResponse
+  java_import com.thoughtworks.go.plugin.domain.common.ValidationResult unless defined? ValidationResult
+  java_import com.thoughtworks.go.plugin.domain.common.ValidationError unless defined? ValidationError
+  java_import com.thoughtworks.go.config.AdminUser unless defined? AdminUser
+  java_import com.thoughtworks.go.plugin.access.elastic.ElasticAgentExtension unless defined? ElasticAgentExtension
+  java_import com.thoughtworks.go.plugin.access.elastic.ElasticAgentMetadataStore unless defined? ElasticAgentMetadataStore
 end

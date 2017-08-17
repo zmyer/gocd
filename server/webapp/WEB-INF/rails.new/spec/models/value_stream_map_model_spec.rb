@@ -30,11 +30,14 @@ describe ValueStreamMapModel do
     #  +---- X -----^
     #
     vsm = ValueStreamMap.new("current", PipelineRevision.new("current", 1, "current-1"))
-    vsm.addUpstreamNode(PipelineDependencyNode.new("p1", "p1"), PipelineRevision.new("p1", 1, "p1-1"), "current")
+    pipeline_dependency_node = PipelineDependencyNode.new("p1", "p1")
+    pipeline_dependency_node.setCanEdit(true)
+    vsm.addUpstreamNode(pipeline_dependency_node, PipelineRevision.new("p1", 1, "p1-1"), "current")
     vsm.addUpstreamMaterialNode(SCMDependencyNode.new("git", "git", "Git"), CaseInsensitiveString.new("git1"), "p1", material_revision)
     vsm.addUpstreamMaterialNode(SCMDependencyNode.new("git", "git", "Git"), CaseInsensitiveString.new("git2"), "current", material_revision)
+    noop_proc = proc {}
 
-    graph_model = ValueStreamMapModel.new(vsm.presentationModel(), nil, @l)
+    graph_model = ValueStreamMapModel.new(vsm.presentationModel(), nil, @l, noop_proc, noop_proc, noop_proc, proc {|pipeline_name| "/edit/#{pipeline_name}"})
     materialNames = Array.new
     materialNames << "git1"
     materialNames << "git2"
@@ -64,6 +67,8 @@ describe ValueStreamMapModel do
     node1InSecondLevel.dependents[0].should == "current"
     node1InSecondLevel.parents[0].should == "git"
     node1InSecondLevel.depth.should == 1
+    node1InSecondLevel.edit_path.should == '/edit/p1'
+    node1InSecondLevel.can_edit.should == true
 
     node2InSecondLevel = graph_model.levels[1].nodes[1]
     node2InSecondLevel.node_type.should == DependencyNodeType::DUMMY.to_s
@@ -138,6 +143,7 @@ describe ValueStreamMapModel do
     nodeP1.instances[0].locator.should == "some/path/to/p1/2"
     nodeP1.instances[0].stages.size.should == 1
     nodeP1.instances[0].stages[0].name.should == "stage-1-for-p1-2"
+    nodeP1.instances[0].stages[0].duration.should == 0
     nodeP1.instances[0].stages[0].status.should == "Passed"
 
     nodeP1.instances[1].label.should == "label-p1-1"
@@ -241,6 +247,7 @@ describe ValueStreamMapModel do
     nodeP1.instances[0].locator.should == "some/path/to/p1/1"
     nodeP1.instances[0].stages.size.should == 2
     nodeP1.instances[0].stages[0].name.should == "stage-1-for-p1-1"
+    nodeP1.instances[0].stages[0].duration.should == 0
     nodeP1.instances[0].stages[0].status.should == "Passed"
 
     nodeP2 = graph_model.levels[2].nodes[0]
@@ -254,6 +261,7 @@ describe ValueStreamMapModel do
     nodeP2.instances[0].stages[0].status.should == "Passed"
     nodeP2.instances[0].stages[0].locator.should == "path/to/stage/p2/1/stage-1-for-p2-1/1"
     nodeP2.instances[0].stages[1].name.should == "unrun_stage"
+    nodeP2.instances[0].stages[1].duration.should be_nil
     nodeP2.instances[0].stages[1].status.should == "Unknown"
     nodeP2.instances[0].stages[1].locator.should == ""
 

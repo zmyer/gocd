@@ -1,5 +1,5 @@
 ##########################GO-LICENSE-START################################
-# Copyright 2015 ThoughtWorks, Inc.
+# Copyright 2017 ThoughtWorks, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ module ApiSpecHelper
     enable_security
     controller.stub(:current_user).and_return(@user = Username.new(CaseInsensitiveString.new(SecureRandom.hex)))
     @security_service.stub(:isUserAdminOfGroup).with(@user.getUsername, group_name).and_return(true)
-    @security_service.stub(:isUserAdmin).with(@user).and_return(true)
+    @security_service.stub(:isUserAdmin).with(@user).and_return(false)
   end
 
   def login_as_user
@@ -56,9 +56,10 @@ module ApiSpecHelper
     controller.stub(:current_user).and_return(@user = Username.new(CaseInsensitiveString.new(SecureRandom.hex)))
     @security_service.stub(:isUserAdmin).with(@user).and_return(false)
     @security_service.stub(:isUserGroupAdmin).with(@user).and_return(false)
+    @security_service.stub(:isUserAdminOfGroup).with(anything, anything).and_return(false)
     @security_service.stub(:isAuthorizedToViewAndEditTemplates).with(@user).and_return(false)
-    @security_service.stub(:isAuthorizedToEditTemplate).with(anything, anything).and_return(false)
-    @security_service.stub(:isAuthorizedToViewTemplate).with(anything, anything).and_return(false)
+    @security_service.stub(:isAuthorizedToEditTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(false)
+    @security_service.stub(:isAuthorizedToViewTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(false)
     @security_service.stub(:isAuthorizedToViewTemplates).with(@user).and_return(false)
   end
 
@@ -85,9 +86,9 @@ module ApiSpecHelper
     enable_security
     controller.stub(:current_user).and_return(@user = Username.new(CaseInsensitiveString.new(SecureRandom.hex)))
     @security_service.stub(:isUserAdmin).with(@user).and_return(true)
-    @security_service.stub(:isAuthorizedToViewTemplate).with(anything, anything).and_return(true)
+    @security_service.stub(:isAuthorizedToViewTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(true)
     @security_service.stub(:isAuthorizedToViewTemplates).with(@user).and_return(true)
-    @security_service.stub(:isAuthorizedToEditTemplate).with(anything, anything).and_return(true)
+    @security_service.stub(:isAuthorizedToEditTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(true)
     @security_service.stub(:isAuthorizedToViewAndEditTemplates).with(anything).and_return(true)
   end
 
@@ -105,8 +106,8 @@ module ApiSpecHelper
     @security_service.stub(:isUserAdmin).with(@user).and_return(false)
     @security_service.stub(:isUserGroupAdmin).with(@user).and_return(false)
     @security_service.stub(:isAuthorizedToViewAndEditTemplates).with(@user).and_return(true)
-    @security_service.stub(:isAuthorizedToEditTemplate).with(anything, anything).and_return(true)
-    @security_service.stub(:isAuthorizedToViewTemplate).with(anything, anything).and_return(true)
+    @security_service.stub(:isAuthorizedToEditTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(true)
+    @security_service.stub(:isAuthorizedToViewTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(true)
     @security_service.stub(:isAuthorizedToViewTemplates).with(@user).and_return(true)
 
   end
@@ -116,8 +117,8 @@ module ApiSpecHelper
     @security_service.stub(:isUserAdmin).with(@user).and_return(false)
     @security_service.stub(:isUserGroupAdmin).with(@user).and_return(false)
     @security_service.stub(:isAuthorizedToViewAndEditTemplates).with(@user).and_return(false)
-    @security_service.stub(:isAuthorizedToEditTemplate).with(anything, anything).and_return(false)
-    @security_service.stub(:isAuthorizedToViewTemplate).with(anything, anything).and_return(false)
+    @security_service.stub(:isAuthorizedToEditTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(false)
+    @security_service.stub(:isAuthorizedToViewTemplate).with(an_instance_of(CaseInsensitiveString), @user).and_return(false)
     @security_service.stub(:isAuthorizedToViewTemplates).with(@user).and_return(false)
   end
 
@@ -183,7 +184,7 @@ RSpec::Matchers.define :allow_action do |verb, expected_action, params={}, heade
     end
 
     if @exception
-      messages << "An exception was raised #{exception.message}."
+      messages << "An exception was raised #{@exception.message}."
     end
 
     messages.join("\n")
@@ -235,7 +236,7 @@ RSpec::Matchers.define :disallow_action do |verb, expected_action, params={}, he
     end
 
     if @exception
-      messages << "An exception was raised #{exception.message}."
+      messages << "An exception was raised #{@exception.message}."
     end
 
     if @failed_with_bad_status

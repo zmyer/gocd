@@ -45,7 +45,7 @@ describe 'stages/_jobs.html.erb' do
       render :partial => "stages/jobs", :locals => {:scope => {:jobs => @jobs, :stage => @stage, :has_operate_permissions => true}}
 
       Capybara.string(response.body).find("form[action='/pipelines/cruise/1/dev/2/rerun-jobs?tab=jobs']").tap do |form|
-        expect(form).to have_selector("button[type='submit']", "RERUN")
+        expect(form).to have_selector("button[type='submit']", "Rerun")
         expect(form).to have_selector("input[type='checkbox'][name='jobs[]'][value='first']")
         expect(form).to have_selector("input[type='checkbox'][name='jobs[]'][value='second']")
         expect(form).to have_selector("input[type='checkbox'][name='jobs[]'][value='third']")
@@ -59,7 +59,7 @@ describe 'stages/_jobs.html.erb' do
       render :partial => "stages/jobs", :locals => {:scope => {:jobs => @jobs, :stage => @stage, :has_operate_permissions => true}}
 
       expect(response.body).to_not have_selector("form")
-      expect(response.body).to_not have_selector("button[type='submit']", "RERUN")
+      expect(response.body).to_not have_selector("button[type='submit']", "Rerun")
       expect(response.body).to_not have_selector("input[type='checkbox'][name='jobs[]'][value='first']")
       expect(response.body).to_not have_selector("input[type='checkbox'][name='jobs[]'][value='second']")
       expect(response.body).to_not have_selector("input[type='checkbox'][name='jobs[]'][value='third']")
@@ -70,7 +70,7 @@ describe 'stages/_jobs.html.erb' do
     it "should not display rerun button if user is not authorized" do
       render :partial => 'stages/jobs', :locals => {:scope => {:jobs => @jobs, :stage => @stage, :has_operate_permissions => false}}
       Capybara.string(response.body).find("div#job_actions").tap do |div|
-        expect(div).to_not have_selector("button[type='submit']", 'RERUN')
+        expect(div).to_not have_selector("button[type='submit']", 'Rerun')
       end
       Capybara.string(response.body).find("table.jobs_summary").tap do |table|
         expect(table).to_not have_selector("input[type='checkbox'][name='jobs[]'][value='first']")
@@ -85,7 +85,7 @@ describe 'stages/_jobs.html.erb' do
       render :partial => 'stages/jobs', :locals => {:scope => {:jobs => @jobs, :stage => @stage, :has_operate_permissions => true}}
 
       Capybara.string(response.body).find("div#job_actions").tap do |f|
-        expect(f).to have_selector("button[type='submit']", :text => 'RERUN')
+        expect(f).to have_selector("button[type='submit']", :text => 'RERUN SELECTED')
       end
 
       Capybara.string(response.body).find("table.jobs_summary").tap do |f|
@@ -133,7 +133,7 @@ describe 'stages/_jobs.html.erb' do
     end
   end
 
-  it "should get job name, state, result" do
+  it "should get job name, state, result with link to agent information" do
     render :partial => "stages/jobs", :locals => {:scope => {:jobs => @jobs, :stage => @stage}}
 
     Capybara.string(response.body).all(".jobs_summary .job").tap do |f|
@@ -141,13 +141,13 @@ describe 'stages/_jobs.html.erb' do
       expect(f[0]).to have_selector(".job_result", :text => /Failed/)
       expect(f[0]).to have_selector(".job_state", :text => "Completed")
       expect(f[0]).to have_selector(".elapsed_time", :text => /^[\s\S]*2 minutes[\s\S]*/)
-      expect(f[0]).to have_selector(".agent[title='location-1'] a[href='#{agent_detail_path(:uuid => 'agent1')}']", :text => "host1(1.1.1.1)")
+      expect(f[0]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent1')}']", :text => "host1 (1.1.1.1)")
 
       expect(f[1]).to have_selector(".job_name a[href='/tab/build/detail/blah-pipeline/1/blah-stage/2/second']", :text => "second")
       expect(f[1]).to have_selector(".job_result", :text => "Passed")
       expect(f[1]).to have_selector(".job_state", :text => "Completed")
       expect(f[1]).to have_selector(".elapsed_time", :text => /^[\s\S]*2 minutes[\s\S]*/)
-      expect(f[1]).to have_selector(".agent[title='location-2'] a[href='#{agent_detail_path(:uuid => 'agent2')}']", :text => "host2(2.2.2.2)")
+      expect(f[1]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent2')}']", :text => "host2 (2.2.2.2)")
 
       expect(f[2]).to have_selector(".job_name a[href='/tab/build/detail/blah-pipeline/1/blah-stage/2/third']", :text => "third")
       expect(f[2]).to have_selector(".job_result", :text => "Active")
@@ -159,13 +159,13 @@ describe 'stages/_jobs.html.erb' do
       expect(f[3]).to have_selector(".job_result", :text => /Active/)
       expect(f[3]).to have_selector(".job_state", :text => "Building")
       expect(f[3]).to have_selector(".elapsed_time", :text => /^[\s\S]*2 minutes[\s\S]*/)
-      expect(f[3]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent4')}']", :text => "host4(4.4.4.4)")
+      expect(f[3]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent4')}']", :text => "host4 (4.4.4.4)")
 
       expect(f[4]).to have_selector(".job_name a[href='/tab/build/detail/blah-pipeline/1/blah-stage/2/fifth']", :text => "fifth")
       expect(f[4]).to have_selector(".job_result", :text => /Cancelled/)
       expect(f[4]).to have_selector(".job_state", :text => "Completed")
       expect(f[4]).to have_selector(".elapsed_time", :text => /^[\s\S]*2 minutes[\s\S]*/)
-      expect(f[4]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent5')}']", :text => "host5(5.5.5.5)")
+      expect(f[4]).to have_selector(".agent a[href='#{agent_detail_path(:uuid => 'agent5')}']", :text => "host5 (5.5.5.5)")
     end
   end
 

@@ -116,7 +116,7 @@ const PipelineConfigWidget = function (options) {
 
         const onReject  = function (data) {
           self.vm.saveFailed(data);
-          if (data.data) {
+          if (data && data.data) {
             ctrl.setPipelineAndPreserveSelection(Pipeline.fromJSON(data.data));
           }
         };
@@ -143,7 +143,7 @@ const PipelineConfigWidget = function (options) {
             <f.row class="heading">
               <f.column size={10} largeSize={10}>
                 <h1>
-                  Pipeline configuation for pipeline
+                  Pipeline configuration for pipeline
                   {' '}
                   {pipeline.name()}
                 </h1>
@@ -187,7 +187,7 @@ const PipelineConfigWidget = function (options) {
           {header()}
           <f.row class={`pipeline-body ${vnode.state.vm.pageSaveState()}`}>
             {errors}
-            <f.column end={true} size={12}>
+            <f.column end size={12}>
               <PipelineSettingsWidget pipeline={vnode.state.pipeline}
                                       vm={vnode.state.vmState('pipelineSettingsConfig')}/>
               <MaterialsConfigWidget materials={pipeline.materials}

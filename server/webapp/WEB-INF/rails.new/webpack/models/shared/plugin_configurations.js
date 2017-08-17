@@ -37,24 +37,28 @@ const PluginConfigurations = function (data) {
     collection: data
   });
 
-  function configForKey(key) {
+  this.configForKey = function (key) {
     return this.findConfiguration((config) => config.key() === key);
-  }
+  };
 
   this.valueFor = function (key) {
-    const config = configForKey.call(this, key);
+    const config = this.configForKey(key);
     if (config) {
       return config.value();
     }
   };
 
   this.setConfiguration = function (key, value) {
-    const existingConfig = configForKey.call(this, key);
-
+    const existingConfig = this.configForKey(key);
     if (!existingConfig) {
       this.createConfiguration({key, value});
     } else {
-      existingConfig.value(value);
+      if (existingConfig.isSecureValue()) {
+        existingConfig.editValue();
+        existingConfig.value(value);
+      } else {
+        existingConfig.value(value);
+      }
     }
   };
 };
@@ -63,12 +67,20 @@ PluginConfigurations.Configuration = function (data) {
   this.parent                = Mixins.GetterSetter();
   this.constructor.modelType = 'plugin-configuration';
 
-  this.key   = Stream(s.defaultToIfBlank(data.key, ''));
+  this.key     = Stream(s.defaultToIfBlank(data.key, ''));
   const _value = Stream(plainOrCipherValue(data));
 
   Mixins.HasEncryptedAttribute.call(this, {attribute: _value, name: 'value'});
 
   Validatable.call(this, data);
+
+  this.displayValue = () => {
+    if (this.isSecureValue()) {
+      return this.value().replace(/./gi, "*");
+    } else {
+      return this.value();
+    }
+  };
 
   this.toJSON = function () {
     if (this.isPlainValue()) {
@@ -77,10 +89,17 @@ PluginConfigurations.Configuration = function (data) {
         value: this.value()
       };
     } else {
-      return {
-        key:               this.key(),
-        'encrypted_value': this.value()
-      };
+      if (this.isDirtyValue()) {
+        return {
+          key:     this.key(),
+          "value": this.value()
+        };
+      } else {
+        return {
+          key:               this.key(),
+          "encrypted_value": this.value()
+        };
+      }
     }
   };
 

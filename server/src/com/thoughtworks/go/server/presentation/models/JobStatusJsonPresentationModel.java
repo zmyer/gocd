@@ -1,5 +1,5 @@
 /*
- * Copyright 2015 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,18 @@
 
 package com.thoughtworks.go.server.presentation.models;
 
-import com.thoughtworks.go.config.AgentConfig;
 import com.thoughtworks.go.domain.JobInstance;
 import com.thoughtworks.go.domain.JobResult;
 import com.thoughtworks.go.domain.JobState;
 import com.thoughtworks.go.domain.NullAgent;
 import com.thoughtworks.go.dto.DurationBean;
+import com.thoughtworks.go.server.domain.Agent;
 import com.thoughtworks.go.server.web.JsonView;
 import com.thoughtworks.go.util.TimeConverter;
 import org.joda.time.DateTime;
 
-import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 import static com.thoughtworks.go.domain.JobState.*;
@@ -36,19 +35,23 @@ import static java.lang.String.valueOf;
 
 
 public class JobStatusJsonPresentationModel {
-    private AgentConfig agentConfig;
+    private Agent agent;
     private final JobInstance instance;
-    private TimeConverter timeConverter = new TimeConverter();
     private DurationBean durationBean;
 
-    public JobStatusJsonPresentationModel(JobInstance instance, AgentConfig agentConfig, DurationBean durationBean) {
+    public JobStatusJsonPresentationModel(JobInstance instance, Agent agent, DurationBean durationBean) {
         this.instance = instance;
-        this.agentConfig = agentConfig == null ? NullAgent.createNullAgent() : agentConfig;
-        this.durationBean = durationBean;
-    }
 
-    public JobStatusJsonPresentationModel(JobInstance instance, AgentConfig agentConfig) {
-        this(instance, agentConfig, new DurationBean(instance.getId()));
+        if (null == instance.getAgentUuid()) {
+            agent = Agent.fromConfig(NullAgent.createNullAgent());
+        }
+
+        if (null == agent) {
+            agent = Agent.blankAgent(instance.getAgentUuid());
+        }
+
+        this.agent = agent;
+        this.durationBean = durationBean;
     }
 
     public JobStatusJsonPresentationModel(JobInstance instance) {
@@ -57,10 +60,10 @@ public class JobStatusJsonPresentationModel {
 
     public Map toJsonHash() {
         Map<String, Object> jsonParams = new LinkedHashMap<>();
-        jsonParams.put("agent", agentConfig.getHostNameForDispaly());
-        jsonParams.put("agent_ip", agentConfig.getIpAddress());
-        jsonParams.put("agent_uuid", agentConfig.getUuid());
-        jsonParams.put("build_scheduled_date", getPreciseScheduledDate());
+        jsonParams.put("agent", agent.getHostname());
+        jsonParams.put("agent_ip", agent.getIpaddress());
+        jsonParams.put("agent_uuid", agent.getUuid());
+        jsonParams.put("build_scheduled_date", getScheduledTime());
         jsonParams.put("build_assigned_date", getPreciseDateFor(Assigned));
         jsonParams.put("build_preparing_date", getPreciseDateFor(Preparing));
         jsonParams.put("build_building_date", getPreciseDateFor(Building));
@@ -140,21 +143,21 @@ public class JobStatusJsonPresentationModel {
         return instance.buildLocatorForDisplay();
     }
 
-    public String getPreciseScheduledDate() {
-        return timeConverter.nullSafeDate(instance.getScheduledDate());
+    private long getPreciseDateFor(JobState state) {
+        Date date = instance.getStartedDateFor(state);
+        if (date != null) {
+            return date.getTime();
+        }
+        return -1;
     }
 
-    public String getPreciseCompletedDate() {
-        return getPreciseDateFor(JobState.Completed);
-    }
 
-    public String getPreciseDateFor(JobState state) {
-        return timeConverter.nullSafeDate(instance.getStartedDateFor(state));
-    }
-
-    public String getHumanReadableScheduledDate() {
-        return timeConverter.getHumanReadableStringWithTimeZone(instance.getScheduledDate());
-
+    private long getScheduledTime() {
+        Date date = instance.getScheduledDate();
+        if (date != null) {
+            return date.getTime();
+        }
+        return -1;
     }
 
     public boolean isCopy() {

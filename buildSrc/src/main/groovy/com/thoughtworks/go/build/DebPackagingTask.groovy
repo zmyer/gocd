@@ -16,12 +16,12 @@
 
 package com.thoughtworks.go.build
 
-import org.gradle.api.tasks.ParallelizableTask
+import org.gradle.api.tasks.OutputFile
 
-@ParallelizableTask
 class DebPackagingTask extends LinuxPackagingTask {
 
-  public File getOutputFile() {
+  @OutputFile
+  File getOutputFile() {
     project.file("${project.convention.plugins.get("base").distsDir}/deb/${packageName}_${version}-${distVersion}_all.deb")
   }
 

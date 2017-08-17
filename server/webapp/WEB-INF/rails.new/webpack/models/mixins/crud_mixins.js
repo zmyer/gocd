@@ -27,12 +27,13 @@ CrudMixins.Index = (options) => {
   const version  = options.version;
   const dataPath = options.dataPath;
 
-  type.all = (cb) => $.Deferred(function () {
+  type.all = (cb, queryParams = {}) => $.Deferred(function () {
     const deferred = this;
 
     const jqXHR = $.ajax({
       method:      'GET',
       url,
+      data:        queryParams,
       timeout:     mrequest.timeout,
       beforeSend(xhr) {
         mrequest.xhrConfig.forVersion(version)(xhr);
@@ -69,7 +70,10 @@ CrudMixins.Create = function (options) {
         method:      'POST',
         url,
         timeout:     mrequest.timeout,
-        beforeSend:  mrequest.xhrConfig.forVersion(version),
+        beforeSend (xhr) {
+          mrequest.xhrConfig.forVersion(version)(xhr);
+          return validateEntity(entity, deferred);
+        },
         data:        JSON.stringify(entity, s.snakeCaser),
         contentType: 'application/json',
       });
@@ -99,7 +103,7 @@ CrudMixins.Delete = function (options) {
 
       const jqXHR = $.ajax({
         method:      'DELETE',
-        url:         url(entity),
+        url:         "function" === typeof url ? url(entity) : url,
         timeout:     mrequest.timeout,
         beforeSend:  mrequest.xhrConfig.forVersion(version),
         contentType: false
@@ -122,6 +126,7 @@ CrudMixins.Update = function (options) {
   const url     = options.resourceUrl;
   const version = options.version;
   const type    = options.type;
+  const method  = options.method; // some API requests use "PATCH"
 
   this.update = function () {
     const entity = this;
@@ -130,12 +135,13 @@ CrudMixins.Update = function (options) {
       const deferred = this;
 
       const jqXHR = $.ajax({
-        method:      'PUT',
-        url:         url(entity),
+        method:      method || "PUT",
+        url:         "function" === typeof url ? url(entity) : url,
         timeout:     mrequest.timeout,
-        beforeSend(xhr) {
+        beforeSend (xhr) {
           mrequest.xhrConfig.forVersion(version)(xhr);
           xhr.setRequestHeader('If-Match', entity.etag());
+          return validateEntity(entity, deferred);
         },
         data:        JSON.stringify(entity, s.snakeCaser),
         contentType: 'application/json',
@@ -166,8 +172,8 @@ CrudMixins.Refresh = function (options) {
       const deferred = this;
 
       const jqXHR = $.ajax({
-        method:      'GET',
-        url:         url(entity),
+        method:      "GET",
+        url:         "function" === typeof url ? url(entity) : url,
         timeout:     mrequest.timeout,
         beforeSend:  mrequest.xhrConfig.forVersion(version),
         contentType: false
@@ -188,19 +194,21 @@ CrudMixins.Refresh = function (options) {
   };
 };
 
-CrudMixins.AllOperations = function (operations, options) {
-  if (_.includes(operations, 'create')) {
-    CrudMixins.Create.call(this, options);
+CrudMixins.AllOperations = function (operations, options, overrides = {}) {
+  _.each(operations, (op) => {
+    const mixin = CrudMixins[_.capitalize(op)];
+    if ("function" === typeof mixin) {
+      mixin.call(this, _.assign({}, options, overrides[op] || {}));
+    }
+  });
+};
+
+const validateEntity = function (entity, deferred) {
+  const isValid = entity.validate()._isEmpty();
+  if (!isValid) {
+    deferred.reject(entity);
   }
-  if (_.includes(operations, 'refresh')) {
-    CrudMixins.Refresh.call(this, options);
-  }
-  if (_.includes(operations, 'update')) {
-    CrudMixins.Update.call(this, options);
-  }
-  if (_.includes(operations, 'delete')) {
-    CrudMixins.Delete.call(this, options);
-  }
+  return entity.validate()._isEmpty();
 };
 
 module.exports = CrudMixins;

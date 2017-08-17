@@ -113,7 +113,6 @@ public class BuildAssignmentServiceIntegrationTest {
     @Autowired private InstanceFactory instanceFactory;
     @Autowired private AgentRemoteHandler agentRemoteHandler;
     @Autowired private PipelineConfigService pipelineConfigService;
-    @Autowired private EntityHashingService entityHashingService;
     @Autowired private ElasticAgentPluginService elasticAgentPluginService;
     @Autowired private DependencyMaterialUpdateNotifier notifier;
 
@@ -751,15 +750,15 @@ public class BuildAssignmentServiceIntegrationTest {
         AgentConfig agentConfig = AgentMother.remoteAgent();
         configHelper.addAgent(agentConfig);
         fixture.createPipelineWithFirstStageScheduled();
-        AgentRuntimeInfo info = AgentRuntimeInfo.fromServer(agentConfig, true, "location", 1000000l, "OS", false);
-        info.setCookie("cookie");
 
         AgentStatus[] statuses = new AgentStatus[] {
                 AgentStatus.Building, AgentStatus.Pending,
-                AgentStatus.Disabled, AgentStatus.Disabled,
+                AgentStatus.Disabled,
                 AgentStatus.LostContact, AgentStatus.Missing
         };
         for (AgentStatus status : statuses) {
+            AgentRuntimeInfo info = AgentRuntimeInfo.fromServer(agentConfig, true, "location", 1000000l, "OS", false);
+            info.setCookie("cookie");
             info.setStatus(status);
             agent = new AgentStub();
 

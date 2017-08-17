@@ -43,7 +43,10 @@ import com.thoughtworks.go.server.cache.GoCache;
 import com.thoughtworks.go.server.dao.DatabaseAccessHelper;
 import com.thoughtworks.go.server.materials.StaleMaterialsOnBuildCause;
 import com.thoughtworks.go.server.transaction.TransactionTemplate;
-import com.thoughtworks.go.serverhealth.*;
+import com.thoughtworks.go.serverhealth.HealthStateScope;
+import com.thoughtworks.go.serverhealth.HealthStateType;
+import com.thoughtworks.go.serverhealth.ServerHealthService;
+import com.thoughtworks.go.serverhealth.ServerHealthState;
 import com.thoughtworks.go.util.FileUtil;
 import com.thoughtworks.go.util.GoConfigFileHelper;
 import com.thoughtworks.go.util.ReflectionUtil;
@@ -92,8 +95,6 @@ public class ScheduledPipelineLoaderIntegrationTest {
     private ServerHealthService serverHealthService;
     @Autowired
     private JobInstanceService jobInstanceService;
-    @Autowired
-    private ArtifactsService artifactsService;
     @Autowired
     private TransactionTemplate transactionTemplate;
     @Autowired
@@ -313,7 +314,7 @@ public class ScheduledPipelineLoaderIntegrationTest {
         assertThat(expiryTime.toDate().after(currentTime), is(true));
         assertThat(expiryTime.toDate().before(new Date(System.currentTimeMillis() + 5 * 60 * 1000 + 1)), is(true));
 
-        String logText = FileUtil.readToEnd(consoleService.findConsoleArtifact(reloadedJobInstance.getIdentifier()));
+        String logText = FileUtil.readToEnd(consoleService.consoleLogArtifact(reloadedJobInstance.getIdentifier()));
         assertThat(logText, containsString("Cannot load job 'last/" + pipeline.getCounter() + "/stage/1/job-one' because material " + onDirTwo + " was not found in config."));
         assertThat(logText, containsString("Job for pipeline 'last/" + pipeline.getCounter() + "/stage/1/job-one' has been failed as one or more material configurations were either changed or removed."));
     }

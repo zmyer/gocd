@@ -1,22 +1,23 @@
-/*************************** GO-LICENSE-START*********************************
- * Copyright 2016 ThoughtWorks, Inc.
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- * ************************GO-LICENSE-END***********************************/
+ */
 package com.thoughtworks.go.buildsession;
 
 import com.jezhumble.javasysmon.JavaSysMon;
 import com.thoughtworks.go.domain.*;
+import com.thoughtworks.go.remote.AgentIdentifier;
 import com.thoughtworks.go.util.Clock;
 import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.HttpService;
@@ -37,13 +38,13 @@ import java.util.concurrent.*;
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
 import static com.thoughtworks.go.util.ExceptionUtils.messageOf;
 import static com.thoughtworks.go.util.FileUtil.applyBaseDirIfRelative;
-import static java.lang.String.format;
 
 public class BuildSession {
     private static final Logger LOG = LoggerFactory.getLogger(BuildSession.class);
     private final Map<String, String> envs;
     private final Map<String, String> secretSubstitutions;
     private final String buildId;
+    private AgentIdentifier agentIdentifier;
     private final BuildStateReporter buildStateReporter;
     private final TaggedStreamConsumer console;
     private final DownloadAction downloadAction;
@@ -71,6 +72,7 @@ public class BuildSession {
         executors.put("mkdirs", new MkdirsCommandExecutor());
         executors.put("cleandir", new CleandirCommandExecutor());
         executors.put("exec", new ExecCommandExecutor());
+        executors.put("plugin", new PluginCommandExecutor(new TfsExecutor()));
         executors.put("test", new TestCommandExecutor());
         executors.put("reportCurrentStatus", new ReportCurrentStatusCommandExecutor());
         executors.put("reportCompleting", new ReportCompletingCommandExecutor());
@@ -79,8 +81,9 @@ public class BuildSession {
         executors.put("error", new ErrorCommandExecutor());
     }
 
-    public BuildSession(String buildId, BuildStateReporter buildStateReporter, TaggedStreamConsumer console, StrLookup buildVariables, ArtifactsRepository artifactsRepository, HttpService httpService, Clock clock, File workingDir) {
+    public BuildSession(String buildId, AgentIdentifier agentIdentifier, BuildStateReporter buildStateReporter, TaggedStreamConsumer console, StrLookup buildVariables, ArtifactsRepository artifactsRepository, HttpService httpService, Clock clock, File workingDir) {
         this.buildId = buildId;
+        this.agentIdentifier = agentIdentifier;
         this.buildStateReporter = buildStateReporter;
         this.console = console;
         this.buildVariables = buildVariables;
@@ -159,7 +162,7 @@ public class BuildSession {
 
         BuildCommandExecutor executor = executors.get(command.getName());
         if (executor == null) {
-            LOG.error("Unknown command: " + command.getName());
+            LOG.error("Unknown command: {}", command.getName());
             println("error: build command " + command.getName() + " is not supported. Please upgrade GoCD agent");
             buildResult = JobResult.Failed;
             return false;
@@ -282,7 +285,7 @@ public class BuildSession {
 
     BuildSession newTestingSession(TaggedStreamConsumer console) {
         BuildSession buildSession = new BuildSession(
-                buildId, new UncaringBuildStateReport(), console, buildVariables, artifactsRepository, httpService, clock, workingDir);
+                buildId, agentIdentifier, new UncaringBuildStateReport(), console, buildVariables, artifactsRepository, httpService, clock, workingDir);
         buildSession.cancelLatch = this.cancelLatch;
         return buildSession;
     }
@@ -307,7 +310,7 @@ public class BuildSession {
 
 
     private BuildSession newCancelSession() {
-        return new BuildSession(buildId, new UncaringBuildStateReport(),
+        return new BuildSession(buildId, agentIdentifier, new UncaringBuildStateReport(),
                 console, buildVariables, artifactsRepository, httpService, clock, workingDir);
     }
 
@@ -335,7 +338,11 @@ public class BuildSession {
             LOG.error(msg, e);
             printlnSafely(msg);
         } catch (Exception reportException) {
-            LOG.error(format("Unable to report error message - %s.", messageOf(e)), reportException);
+            LOG.error("Unable to report error message - {}.", messageOf(e), reportException);
         }
+    }
+
+    public AgentIdentifier getAgentIdentifier() {
+        return agentIdentifier;
     }
 }

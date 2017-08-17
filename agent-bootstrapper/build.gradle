@@ -1,7 +1,7 @@
 import com.thoughtworks.go.build.VerifyJarTask
 
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,8 +21,10 @@ description = 'GoCD Agent Bootstrapper'
 dependencies {
   compile project(':agent-common')
   compile group: 'com.apple', name: 'AppleJavaExtensions', version: '1.4'
+  compile group: 'commons-codec', name: 'commons-codec', version: '1.10'
   testCompile project(':test-utils')
-
+  testCompile group: 'org.mockito', name: 'mockito-core', version: project.versions.mockito
+  testCompile group: 'org.hamcrest', name: 'hamcrest-library', version: project.versions.hamcrest
   packagingOnly project(path: ':agent-launcher', configuration: 'fatJarConfig')
   extractedAtTopLevel group: 'one-jar', name: 'boot', version: '0.96'
 }
@@ -31,60 +33,58 @@ jar {
   classifier 'classes'
 }
 
-task fatJar(type: Jar, dependsOn: [':agent-bootstrapper:jar', ":agent-launcher:fatJar"]) {
+task fatJar(type: Jar) {
+  dependsOn jar, configurations.packagingOnly, configurations.extractedAtTopLevel
+
   manifest {
     attributes 'Main-Class': 'com.simontuffs.onejar.Boot'
     attributes 'One-Jar-Main-Class': 'com.thoughtworks.go.agent.bootstrapper.AgentBootstrapper'
   }
 
-  doFirst {
-    from(configurations.compile) { into "lib/" }
-    from(jar.archivePath) {
-      into('main/')
-      rename "(.*)-${project.version}-classes.jar", 'agent-bootstrapper-classes.jar'
-    }
+  from(configurations.compile) { into "lib/" }
 
-    from(configurations.packagingOnly) {
-      into "defaultFiles/"
-      rename "(.*)-${project.version}.jar", '$1.jar'
-    }
-
-    with(copySpec {
-      from { configurations.extractedAtTopLevel.collect { it.isDirectory() ? it : zipTree(it) } }
-      include '**/*.class'
-      exclude 'OneJar.class'
-      into("/")
-    })
+  from(jar.archivePath) {
+    into('main/')
+    rename "(.*)-${project.version}-classes.jar", 'agent-bootstrapper-classes.jar'
   }
 
-  doLast {
-    verifyJar.execute()
+  from(configurations.packagingOnly) {
+    into "defaultFiles/"
+    rename "(.*)-${project.version}.jar", '$1.jar'
+  }
+
+  from(configurations.extractedAtTopLevel.collect { it.isDirectory() ? it : zipTree(it) }) {
+    include '**/*.class'
+    exclude 'OneJar.class'
+    into("/")
   }
 }
 
 task verifyJar(type: VerifyJarTask) {
   jarTask = fatJar
   expectedJars = [
-      'defaultFiles': [
-          "agent-launcher.jar",
-      ],
-      'main'        : [
-          "agent-bootstrapper-classes.jar",
-      ],
-      "lib"         : [
-          "agent-common-${project.version}.jar",
-          "AppleJavaExtensions-1.4.jar",
-          "base-${project.version}.jar",
-          "commons-codec-1.10.jar",
-          "commons-io-2.5.jar",
-          "commons-lang-2.6.jar",
-          "commons-logging-1.2.jar",
-          "httpclient-4.5.2.jar",
-          "httpcore-4.4.4.jar",
-          "jcommander-1.60.jar",
-          "joda-time-2.3.jar",
-          "log4j-1.2.17.jar",
-      ]
+    'defaultFiles': [
+      "agent-launcher.jar",
+    ],
+    'main'        : [
+      "agent-bootstrapper-classes.jar",
+    ],
+    "lib"         : [
+      "agent-common-${project.version}.jar",
+      "AppleJavaExtensions-1.4.jar",
+      "base-${project.version}.jar",
+      "commons-codec-1.10.jar",
+      "commons-io-2.5.jar",
+      "commons-lang-2.6.jar",
+      "commons-logging-1.2.jar",
+      "httpclient-4.5.2.jar",
+      "httpcore-4.4.4.jar",
+      "jcommander-1.60.jar",
+      "joda-time-2.3.jar",
+      "log4j-1.2.17.jar",
+      "slf4j-api-1.7.21.jar",
+      "slf4j-log4j12-1.7.21.jar",
+    ]
   ]
 }
 

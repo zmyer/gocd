@@ -21,6 +21,7 @@ import com.thoughtworks.go.domain.ConfigErrors;
 import com.thoughtworks.go.domain.config.Admin;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 
@@ -43,7 +44,7 @@ public class RolesConfig extends BaseCollection<Role> implements Validatable {
 
     public void validate(ValidationContext validationContext) {
         if (new HashSet<>(roleNames()).size() != roleNames().size()) {
-            this.configErrors.add("role", "Role names should be unique. Duplicate names found.");
+            this.configErrors.add("name", "Role names should be unique. Duplicate names found.");
         }
     }
 
@@ -101,6 +102,18 @@ public class RolesConfig extends BaseCollection<Role> implements Validatable {
         return null;
     }
 
+    public Role findByNameAndType(final CaseInsensitiveString roleName, Class cls) {
+        for (Role role : this) {
+            if (role.getName().equals(roleName) && (role.getClass().getCanonicalName().equals(cls.getCanonicalName()))) {
+                return role;
+            }
+        }
+        return null;
+    }
+
+    public boolean isUniqueRoleName(final CaseInsensitiveString roleName) {
+        return Collections.frequency(roleNames(), roleName) <= 1;
+    }
 
     public PluginRoleConfig findPluginRoleByName(CaseInsensitiveString pluginRoleName) {
         for (PluginRoleConfig pluginRoleConfig : getPluginRoleConfigs()) {
@@ -127,6 +140,19 @@ public class RolesConfig extends BaseCollection<Role> implements Validatable {
 
     public List<PluginRoleConfig> getPluginRoleConfigs() {
         return filterRolesBy(PluginRoleConfig.class);
+    }
+
+    public List<PluginRoleConfig> pluginRoleConfigsFor(String authConfigId) {
+        List<PluginRoleConfig> rolesConfig = new ArrayList<>();
+        for (Role role : this) {
+            if (role instanceof PluginRoleConfig) {
+                if (((PluginRoleConfig) role).getAuthConfigId().equals(authConfigId)) {
+                    rolesConfig.add((PluginRoleConfig) role);
+                }
+            }
+        }
+
+        return rolesConfig;
     }
 
     public List<RoleConfig> getRoleConfigs() {

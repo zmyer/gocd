@@ -22,8 +22,6 @@ import com.thoughtworks.go.plugin.api.request.GoPluginApiRequest;
 import com.thoughtworks.go.plugin.api.response.GoPluginApiResponse;
 import com.thoughtworks.go.plugin.infra.commons.PluginUploadResponse;
 import com.thoughtworks.go.plugin.infra.listeners.DefaultPluginJarChangeListener;
-import com.thoughtworks.go.plugin.infra.listeners.PluginsListListener;
-import com.thoughtworks.go.plugin.infra.listeners.PluginsZipUpdater;
 import com.thoughtworks.go.plugin.infra.monitor.DefaultPluginJarLocationMonitor;
 import com.thoughtworks.go.plugin.infra.plugininfo.DefaultPluginRegistry;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
@@ -46,7 +44,8 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Random;
 
-import static com.thoughtworks.go.util.SystemEnvironment.*;
+import static com.thoughtworks.go.util.SystemEnvironment.PLUGIN_BUNDLE_PATH;
+import static com.thoughtworks.go.util.SystemEnvironment.PLUGIN_EXTERNAL_PROVIDED_PATH;
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -76,10 +75,6 @@ public class DefaultPluginManagerTest {
     private PluginWriter pluginWriter;
     @Mock
     private PluginValidator pluginValidator;
-    @Mock
-    private PluginsZipUpdater pluginsZipUpdater;
-    @Mock
-    private PluginsListListener pluginsListListener;
 
     private File BUNDLE_DIR;
     private File PLUGIN_EXTERNAL_DIR;
@@ -94,7 +89,6 @@ public class DefaultPluginManagerTest {
         PLUGIN_EXTERNAL_DIR.mkdirs();
 
         when(systemEnvironment.get(PLUGIN_BUNDLE_PATH)).thenReturn(TEST_PLUGIN_BUNDLE_PATH);
-        when(systemEnvironment.get(PLUGIN_FRAMEWORK_ENABLED)).thenReturn(Boolean.TRUE);
         when(systemEnvironment.get(PLUGIN_EXTERNAL_PROVIDED_PATH)).thenReturn(pluginExternalDirName);
     }
 
@@ -108,7 +102,7 @@ public class DefaultPluginManagerTest {
     @Test
     public void shouldProceedToPluginWriterWithValidJarFile() throws Exception {
         NEW_JAR_FILE.createNewFile();
-        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
         when(pluginValidator.namecheckForJar(NEW_JAR_FILE.getName())).thenReturn(true);
 
         defaultPluginManager.addPlugin(NEW_JAR_FILE, NEW_JAR_FILE.getName());
@@ -124,7 +118,7 @@ public class DefaultPluginManagerTest {
     @Test
     public void shouldReturnTheResponseReturnedByPluginWriterWithValidJarFile() throws Exception {
         NEW_JAR_FILE.createNewFile();
-        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
         when(pluginValidator.namecheckForJar(NEW_JAR_FILE.getName())).thenReturn(true);
         PluginUploadResponse expectedResponse = PluginUploadResponse.create(true, "successful!", null);
         when(pluginWriter.addPlugin(NEW_JAR_FILE, NEW_JAR_FILE.getName())).thenReturn(expectedResponse);
@@ -137,7 +131,7 @@ public class DefaultPluginManagerTest {
     @Test
     public void shouldReturnResponseWithErrorsWithInvalidJarFile() throws Exception {
         NON_JAR_FILE.createNewFile();
-        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager defaultPluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
         when(pluginValidator.namecheckForJar(NON_JAR_FILE.getName())).thenReturn(false);
 
         PluginUploadResponse response = defaultPluginManager.addPlugin(NON_JAR_FILE, "not a jar");
@@ -153,14 +147,14 @@ public class DefaultPluginManagerTest {
         String pluginJarFile = "descriptor-aware-test-plugin.should.be.deleted.jar";
         copyPluginToTheDirectory(BUNDLE_DIR, pluginJarFile);
 
-        new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener).startInfrastructure(true);
+        new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment).startInfrastructure(true);
 
         assertThat(BUNDLE_DIR.exists(), is(false));
     }
 
     @Test
     public void shouldStartOSGiFrameworkBeforeStartingMonitor() throws Exception {
-        new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener).startInfrastructure(true);
+        new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment).startInfrastructure(true);
         InOrder inOrder = inOrder(goPluginOSGiFramework, monitor);
 
         inOrder.verify(goPluginOSGiFramework).start();
@@ -168,18 +162,8 @@ public class DefaultPluginManagerTest {
     }
 
     @Test
-    public void shouldNotStartPluginFrameworkIfPluginsAreDisabled() throws Exception {
-        when(systemEnvironment.get(PLUGIN_FRAMEWORK_ENABLED)).thenReturn(Boolean.FALSE);
-
-        new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
-
-        verifyZeroInteractions(goPluginOSGiFramework);
-        verifyZeroInteractions(monitor);
-    }
-
-    @Test
     public void shouldAllowRunningAnActionOnAllRegisteredImplementations() throws Exception {
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
 
         Action action = mock(Action.class);
         pluginManager.doOnAll(SomeInterface.class, action);
@@ -189,7 +173,7 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldAllowRunningAnActionOnASpecificPlugin() throws Exception {
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
 
         Action action = mock(Action.class);
         String pluginId = "test-plugin-id";
@@ -201,7 +185,7 @@ public class DefaultPluginManagerTest {
     @Test
     public void shouldAllowRegistrationOfPluginChangeListenersForGivenServiceReferences() throws Exception {
         GoPlugginOSGiFrameworkStub frameworkStub = new GoPlugginOSGiFrameworkStub();
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, frameworkStub, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, frameworkStub, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
 
         Action action = mock(Action.class);
         String pluginId1 = "test-plugin-id-1";
@@ -240,7 +224,7 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldAllowRunningAnActionOnASpecificPluginIfReferenceExists() throws Exception {
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
 
         Action action = mock(Action.class);
         String pluginId1 = "test-plugin-id-1";
@@ -258,7 +242,7 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldAllowRunningAnActionOnAllRegisteredImplementationsWithExceptionHandling() throws Exception {
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
 
         Action action = mock(Action.class);
         ExceptionHandler exceptionHandler = mock(ExceptionHandler.class);
@@ -269,7 +253,7 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldAllowRunningAnActionOnRegisteredImplementationOfSpecifiedPlugin() {
-        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        PluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
         ActionWithReturn action = mock(ActionWithReturn.class);
         pluginManager.doOn(SomeInterface.class, "plugin-id", action);
 
@@ -278,7 +262,7 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldGetPluginDescriptorForGivenPluginIdCorrectly() throws Exception {
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, null, pluginWriter, pluginValidator, systemEnvironment);
         GoPluginDescriptor pluginDescriptorForP1 = new GoPluginDescriptor("p1", "1.0", null, null, null, true);
         when(registry.getPlugin("valid-plugin")).thenReturn(pluginDescriptorForP1);
         when(registry.getPlugin("invalid-plugin")).thenReturn(null);
@@ -305,7 +289,7 @@ public class DefaultPluginManagerTest {
             }
         }).when(goPluginOSGiFramework).doOn(eq(GoPlugin.class), eq("plugin-id"), any(ActionWithReturn.class));
 
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         GoPluginApiResponse actualResponse = pluginManager.submitTo("plugin-id", request);
 
         assertThat(actualResponse, is(expectedResponse));
@@ -317,7 +301,7 @@ public class DefaultPluginManagerTest {
     public void shouldCheckIfReferenceCanBeFoundForServiceClassAndPluginId() throws Exception {
         String pluginId = "plugin-id";
         when(goPluginOSGiFramework.hasReferenceFor(GoPlugin.class, pluginId)).thenReturn(true);
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         assertThat(pluginManager.hasReferenceFor(GoPlugin.class, pluginId), is(true));
     }
 
@@ -338,7 +322,7 @@ public class DefaultPluginManagerTest {
         }).when(goPluginOSGiFramework).doOn(eq(GoPlugin.class), eq(pluginId), any(ActionWithReturn.class));
         when(goPlugin.pluginIdentifier()).thenReturn(pluginIdentifier);
 
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         assertTrue(pluginManager.isPluginOfType("sample-extension", pluginId));
     }
 
@@ -347,7 +331,7 @@ public class DefaultPluginManagerTest {
         final String pluginThatDoesNotImplement = "plugin-that-does-not-implement";
         when(goPluginOSGiFramework.hasReferenceFor(GoPlugin.class, pluginThatDoesNotImplement)).thenReturn(false);
 
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         assertFalse(pluginManager.isPluginOfType("extension-type", pluginThatDoesNotImplement));
         verify(goPluginOSGiFramework).hasReferenceFor(GoPlugin.class, pluginThatDoesNotImplement);
         verify(goPluginOSGiFramework, never()).doOn(eq(GoPlugin.class), eq(pluginThatDoesNotImplement), any(ActionWithReturn.class));
@@ -371,7 +355,7 @@ public class DefaultPluginManagerTest {
         }).when(goPluginOSGiFramework).doOn(eq(GoPlugin.class), eq(pluginThatDoesNotImplement), any(ActionWithReturn.class));
         when(goPlugin.pluginIdentifier()).thenReturn(pluginIdentifier);
 
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, goPluginOSGiFramework, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         assertFalse(pluginManager.isPluginOfType("extension-type", pluginThatDoesNotImplement));
         verify(goPluginOSGiFramework).doOn(eq(GoPlugin.class), eq(pluginThatDoesNotImplement), any(ActionWithReturn.class));
     }
@@ -383,7 +367,7 @@ public class DefaultPluginManagerTest {
         GoPlugginOSGiFrameworkStub osGiFrameworkStub = new GoPlugginOSGiFrameworkStub(goPlugin);
         osGiFrameworkStub.addHasReferenceFor(GoPlugin.class, pluginId, true);
         when(goPlugin.pluginIdentifier()).thenReturn(new GoPluginIdentifier("sample-extension", asList("1.0", "2.0")));
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, osGiFrameworkStub, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, osGiFrameworkStub, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         assertThat(pluginManager.resolveExtensionVersion(pluginId, asList("1.0", "2.0", "3.0")), is("2.0"));
 
     }
@@ -395,7 +379,7 @@ public class DefaultPluginManagerTest {
         GoPlugginOSGiFrameworkStub osGiFrameworkStub = new GoPlugginOSGiFrameworkStub(goPlugin);
         osGiFrameworkStub.addHasReferenceFor(GoPlugin.class, pluginId, true);
         when(goPlugin.pluginIdentifier()).thenReturn(new GoPluginIdentifier("sample-extension", asList("1.0", "2.0")));
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, osGiFrameworkStub, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, osGiFrameworkStub, jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         try {
             pluginManager.resolveExtensionVersion(pluginId, asList("3.0", "4.0"));
             fail("should have thrown exception for not finding matching extension version");
@@ -406,23 +390,12 @@ public class DefaultPluginManagerTest {
 
     @Test
     public void shouldAddPluginChangeListener() throws Exception {
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, mock(GoPluginOSGiFramework.class), jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
+        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, mock(GoPluginOSGiFramework.class), jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment);
         pluginManager.startInfrastructure(true);
 
         InOrder inOrder = inOrder(monitor);
 
         inOrder.verify(monitor).addPluginJarChangeListener(jarChangeListener);
-    }
-
-    @Test
-    public void shouldAddPluginsFolderChangeListener() throws Exception {
-        DefaultPluginManager pluginManager = new DefaultPluginManager(monitor, registry, mock(GoPluginOSGiFramework.class), jarChangeListener, pluginRequestProcessorRegistry, pluginWriter, pluginValidator, systemEnvironment, pluginsZipUpdater, pluginsListListener);
-        pluginManager.registerPluginsFolderChangeListener();
-
-        InOrder inOrder = inOrder(monitor);
-
-        inOrder.verify(monitor).addPluginsFolderChangeListener(pluginsZipUpdater);
-        inOrder.verify(monitor).addPluginsFolderChangeListener(pluginsListListener);
     }
 
     @After

@@ -25,13 +25,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.*;
 
 public class AuthorizationPluginInfoBuilderTest {
@@ -46,8 +44,11 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldBuildPluginInfoWithAuthSettings() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
-        List<PluginConfiguration> pluginConfigurations = Arrays.asList(new PluginConfiguration("username", new Metadata(true, false)));
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        List<PluginConfiguration> pluginConfigurations = Arrays.asList(
+                new PluginConfiguration("username", new Metadata(true, false)),
+                new PluginConfiguration("password", new Metadata(true, true))
+        );
 
         when(extension.getAuthConfigMetadata(descriptor.id())).thenReturn(pluginConfigurations);
         when(extension.getAuthConfigView(descriptor.id())).thenReturn("auth_config");
@@ -59,8 +60,11 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldBuildPluginInfoWithRoleSettings() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
-        List<PluginConfiguration> pluginConfigurations = Arrays.asList(new PluginConfiguration("group", new Metadata(true, false)));
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        List<PluginConfiguration> pluginConfigurations = Arrays.asList(
+                new PluginConfiguration("group", new Metadata(true, false)),
+                new PluginConfiguration("something_secure", new Metadata(true, true))
+        );
 
         when(extension.getRoleConfigurationMetadata(descriptor.id())).thenReturn(pluginConfigurations);
         when(extension.getRoleConfigurationView(descriptor.id())).thenReturn("role_config");
@@ -72,7 +76,7 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldNotHaveRoleSettingsInPluginInfoIfPluginCannotAuthorize() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
         Capabilities capabilities = new Capabilities(SupportedAuthType.Password, true, false);
 
         when(extension.getCapabilities(descriptor.id())).thenReturn(capabilities);
@@ -84,7 +88,7 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldBuildPluginInfoWithPluginDescriptor() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
 
         AuthorizationPluginInfo pluginInfo = new AuthorizationPluginInfoBuilder(extension).pluginInfoFor(descriptor);
 
@@ -93,8 +97,8 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldBuildPluginInfoWithImage() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
-        Image icon = new Image("content_type", "data");
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        Image icon = new Image("content_type", "data", "hash");
 
         when(extension.getIcon(descriptor.id())).thenReturn(icon);
 
@@ -105,7 +109,7 @@ public class AuthorizationPluginInfoBuilderTest {
 
     @Test
     public void shouldBuildPluginInfoWithCapablities() throws Exception {
-        GoPluginDescriptor descriptor =  new GoPluginDescriptor("plugin1", null, null, null, null, false);
+        GoPluginDescriptor descriptor = new GoPluginDescriptor("plugin1", null, null, null, null, false);
         Capabilities capabilities = new Capabilities(SupportedAuthType.Password, true, true);
 
         when(extension.getCapabilities(descriptor.id())).thenReturn(capabilities);

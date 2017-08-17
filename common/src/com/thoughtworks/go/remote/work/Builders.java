@@ -1,24 +1,22 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.remote.work;
 
 import com.thoughtworks.go.config.RunIfConfig;
-import com.thoughtworks.go.domain.BuildLogElement;
-import com.thoughtworks.go.domain.GoControlLog;
 import com.thoughtworks.go.domain.JobResult;
 import com.thoughtworks.go.domain.builder.Builder;
 import com.thoughtworks.go.domain.builder.NullBuilder;
@@ -26,6 +24,8 @@ import com.thoughtworks.go.plugin.access.pluggabletask.TaskExtension;
 import com.thoughtworks.go.util.command.EnvironmentVariableContext;
 import com.thoughtworks.go.work.DefaultGoPublisher;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,17 +34,15 @@ import static java.lang.String.format;
 public class Builders {
     private List<Builder> builders = new ArrayList<>();
     private final DefaultGoPublisher goPublisher;
-    private final GoControlLog buildLog;
     private TaskExtension taskExtension;
     private Builder currentBuilder = new NullBuilder();
     private transient boolean cancelStarted;
     private transient boolean cancelFinished;
 
     public Builders(List<Builder> builders, DefaultGoPublisher goPublisher,
-                    GoControlLog buildLog, TaskExtension taskExtension) {
+                    TaskExtension taskExtension) {
         this.builders = builders;
         this.goPublisher = goPublisher;
-        this.buildLog = buildLog;
         this.taskExtension = taskExtension;
     }
 
@@ -60,19 +58,22 @@ public class Builders {
                 currentBuilder = builder;
             }
 
-            BuildLogElement buildLogElement = new BuildLogElement();
-
             if (builder.allowRun(RunIfConfig.fromJobResult(result.toLowerCase()))) {
                 JobResult taskStatus = JobResult.Passed;
+                Instant start = Instant.now();
+
                 try {
                     String executeMessage = format("Task: %s", builder.getDescription());
                     goPublisher.taggedConsumeLineWithPrefix(DefaultGoPublisher.TASK_START, executeMessage);
 
-                    builder.build(buildLogElement, goPublisher,
+                    builder.build(goPublisher,
                             environmentVariableContext, taskExtension);
                 } catch (Exception e) {
                     result = taskStatus = JobResult.Failed;
                 }
+
+                Duration duration = Duration.between(start, Instant.now());
+                String statusLine = format("Task status: %s (%d ms)", taskStatus.toLowerCase(), duration.toMillis());
 
                 if (cancelStarted) {
                     result = taskStatus = JobResult.Cancelled;
@@ -80,16 +81,19 @@ public class Builders {
 
                 String tag;
 
-                if (taskStatus.isCancelled()) {
-                    tag = DefaultGoPublisher.TASK_CANCELLED;
+                if (taskStatus.isPassed()) {
+                    tag = DefaultGoPublisher.TASK_PASS;
                 } else {
-                    tag = taskStatus.isPassed() ? DefaultGoPublisher.TASK_PASS : DefaultGoPublisher.TASK_FAIL;
+                    if (Builder.UNSET_EXIT_CODE != builder.getExitCode()) {
+                        statusLine = format("%s (exit code: %d)", statusLine, builder.getExitCode());
+                    }
+
+                    tag = taskStatus.isCancelled() ? DefaultGoPublisher.TASK_CANCELLED : DefaultGoPublisher.TASK_FAIL;
                 }
 
-                goPublisher.taggedConsumeLineWithPrefix(tag, format("Task status: %s", taskStatus.toLowerCase()));
+                goPublisher.taggedConsumeLineWithPrefix(tag, statusLine);
             }
 
-            buildLog.addContent(buildLogElement.getElement());
         }
 
         synchronized (this) {
@@ -156,7 +160,6 @@ public class Builders {
         int result;
         result = (builders != null ? builders.hashCode() : 0);
         result = 31 * result + (goPublisher != null ? goPublisher.hashCode() : 0);
-        result = 31 * result + (buildLog != null ? buildLog.hashCode() : 0);
         result = 31 * result + (currentBuilder != null ? currentBuilder.hashCode() : 0);
         result = 31 * result + (cancelStarted ? 1 : 0);
         return result;

@@ -110,7 +110,7 @@
             <div id="error-box">
               $SPRING_SECURITY_LAST_EXCEPTION.message.replaceAll(";.*", "")
               <a target="_blank"
-                 href="https://docs.gocd.io/current/configuration/dev_authentication.html#common-errors">Help
+                 href="https://docs.gocd.org/current/configuration/dev_authentication.html#common-errors">Help
                 Topic: Authentication</a>
             </div>
             <div class="ab-bg">
@@ -141,7 +141,7 @@
                 </p>
 
                 <p id="login-actions">
-                  <a target="_blank" href="https://gocd.io/help"
+                  <a target="_blank" href="https://gocd.org/help"
                      title="Click to open help documentation" class="help">$l.localize("HELP_SMALL")</a>
                 ##                                    <input class="default" name="commit" type="submit" id="signin" value="Sign in &#187;"/>
 
@@ -155,11 +155,21 @@
               </form>
             </div>
 
-            #foreach ($authentication_plugin_id in $authentication_plugin_registry.getPluginsThatSupportsWebBasedAuthentication())
-              <a href="/go/plugin/interact/$authentication_plugin_id/index"><img
-                  src="$authentication_plugin_registry.getDisplayImageURLFor($authentication_plugin_id)"
-                  alt="$authentication_plugin_registry.getDisplayNameFor($authentication_plugin_id)"/></a>
-            #end
+            <div class="authorization-plugins">
+              #set( $allConfiguredWebBasedAuthorizationPlugins = $security_auth_config_service.getAllConfiguredWebBasedAuthorizationPlugins() )
+              #set( $allAuthenticationPlugins = $authentication_plugin_registry.getPluginsThatSupportsWebBasedAuthentication() )
+              #foreach ($model in $allConfiguredWebBasedAuthorizationPlugins)
+                  <a href="/go/plugin/$model.pluginId()/login"><img class="authorization-plugin-icon" src="$model.imageUrl()" alt="$model.name()"/></a>
+              #end
+              #if($allConfiguredWebBasedAuthorizationPlugins.size() > 0 && $allAuthenticationPlugins.size() > 0)
+                <div class="vertical-line"></div>
+              #end
+              #foreach ($authentication_plugin_id in $allAuthenticationPlugins)
+                <a href="/go/plugin/interact/$authentication_plugin_id/index"><img
+                    src="$authentication_plugin_registry.getDisplayImageURLFor($authentication_plugin_id)"
+                    alt="$authentication_plugin_registry.getDisplayNameFor($authentication_plugin_id)"/></a>
+              #end
+            </div>
 
           </div>
         </div>

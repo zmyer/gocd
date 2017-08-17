@@ -27,6 +27,7 @@ import com.thoughtworks.go.plugin.access.common.settings.PluginSettingsJsonMessa
 import com.thoughtworks.go.plugin.access.common.settings.PluginSettingsJsonMessageHandler1_0;
 import com.thoughtworks.go.plugin.api.response.validation.ValidationResult;
 import com.thoughtworks.go.plugin.domain.common.PluginConfiguration;
+import com.thoughtworks.go.plugin.domain.common.VerifyConnectionResponse;
 import com.thoughtworks.go.plugin.infra.PluginManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -94,20 +95,15 @@ public class AuthorizationExtension extends AbstractExtension {
         });
     }
 
-    public ValidationResult verifyConnection(final String pluginId, final Map<String, String> configuration) {
-        ValidationResult validationResult = validateAuthConfig(pluginId, configuration);
-        if (!validationResult.isSuccessful()) {
-            return validationResult;
-        }
-
-        return pluginRequestHelper.submitRequest(pluginId, REQUEST_VERIFY_CONNECTION, new DefaultPluginInteractionCallback<ValidationResult>() {
+    public VerifyConnectionResponse verifyConnection(final String pluginId, final Map<String, String> configuration) {
+        return pluginRequestHelper.submitRequest(pluginId, REQUEST_VERIFY_CONNECTION, new DefaultPluginInteractionCallback<VerifyConnectionResponse>() {
             @Override
             public String requestBody(String resolvedExtensionVersion) {
                 return getMessageConverter(resolvedExtensionVersion).verifyConnectionRequestBody(configuration);
             }
 
             @Override
-            public ValidationResult onSuccess(String responseBody, String resolvedExtensionVersion) {
+            public VerifyConnectionResponse onSuccess(String responseBody, String resolvedExtensionVersion) {
                 return getMessageConverter(resolvedExtensionVersion).getVerifyConnectionResultFromResponseBody(responseBody);
             }
         });
@@ -185,7 +181,63 @@ public class AuthorizationExtension extends AbstractExtension {
         });
     }
 
+    public Map<String, String> fetchAccessToken(String pluginId, Map<String, String> requestHeaders, final Map<String, String> requestParams, List<SecurityAuthConfig> authConfigs) {
+        return pluginRequestHelper.submitRequest(pluginId, REQUEST_ACCESS_TOKEN, new DefaultPluginInteractionCallback<Map<String, String>>() {
+            @Override
+            public String requestBody(String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).grantAccessRequestBody(authConfigs);
+            }
+
+            @Override
+            public Map<String, String> requestParams(String resolvedExtensionVersion) {
+                return requestParams;
+            }
+
+            @Override
+            public Map<String, String> requestHeaders(String resolvedExtensionVersion) {
+                return requestHeaders;
+            }
+
+            @Override
+            public Map<String, String> onSuccess(String responseBody, String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).getCredentials(responseBody);
+            }
+        });
+    }
+
     public AuthorizationMessageConverter getMessageConverter(String version) {
         return messageHandlerMap.get(version);
+    }
+
+    public AuthenticationResponse authenticateUser(String pluginId, Map<String, String> credentials, List<SecurityAuthConfig> authConfigs, List<PluginRoleConfig> roleConfigs) {
+        if (authConfigs == null || authConfigs.isEmpty()) {
+            throw new MissingAuthConfigsException(String.format("No AuthConfigs configured for plugin: %s, Plugin would need at-least one auth_config to authenticate user.", pluginId));
+        }
+
+        return pluginRequestHelper.submitRequest(pluginId, REQUEST_AUTHENTICATE_USER, new DefaultPluginInteractionCallback<AuthenticationResponse>() {
+            @Override
+            public String requestBody(String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).authenticateUserRequestBody(credentials, authConfigs, roleConfigs);
+            }
+
+            @Override
+            public AuthenticationResponse onSuccess(String responseBody, String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).getAuthenticatedUserFromResponseBody(responseBody);
+            }
+        });
+    }
+
+    public String getAuthorizationServerUrl(String pluginId, List<SecurityAuthConfig> authConfigs, String siteUrl) {
+        return pluginRequestHelper.submitRequest(pluginId, REQUEST_AUTHORIZATION_SERVER_URL, new DefaultPluginInteractionCallback<String>() {
+            @Override
+            public String requestBody(String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).authorizationServerUrlRequestBody(pluginId, authConfigs, siteUrl);
+            }
+
+            @Override
+            public String onSuccess(String responseBody, String resolvedExtensionVersion) {
+                return getMessageConverter(resolvedExtensionVersion).getAuthorizationServerUrl(responseBody);
+            }
+        });
     }
 }

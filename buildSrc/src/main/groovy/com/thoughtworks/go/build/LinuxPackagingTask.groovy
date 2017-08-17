@@ -35,12 +35,18 @@ public abstract class LinuxPackagingTask extends DefaultTask {
   @Input
   String distVersion
 
+  @Input
+  void setFiles(files) {
+    this.files = files
+    files.each { fileName, permissions ->
+      inputs.files(permissions.source)
+    }
+  }
 
   @OutputFile
   abstract public File getOutputFile()
 
   LinuxPackagingTask() {
-    outputs.upToDateWhen { false }
   }
 
   @TaskAction
@@ -70,7 +76,7 @@ public abstract class LinuxPackagingTask extends DefaultTask {
     cmd += ['--category', 'Development/Build Tools']
     cmd += ['--architecture', 'all']
     cmd += ['--maintainer', 'ThoughtWorks, Inc.']
-    cmd += ['--url', 'https://gocd.io']
+    cmd += ['--url', 'https://gocd.org']
     cmd += ['--before-install', project.file('linux/shared/before-install.sh.erb')]
     cmd += ['--before-upgrade', project.file("linux/${packageType()}/before-upgrade.sh.erb")]
     cmd += ['--after-upgrade', project.file("linux/${packageType()}/after-upgrade.sh.erb")]
@@ -122,7 +128,7 @@ public abstract class LinuxPackagingTask extends DefaultTask {
       project.copy {
         from permissions.source
         into project.file("${buildRoot()}/${new File(fileName).parentFile}")
-        rename new File(permissions.source).name, new File(fileName).name
+        rename project.file(permissions.source).name, new File(fileName).name
       }
     }
 

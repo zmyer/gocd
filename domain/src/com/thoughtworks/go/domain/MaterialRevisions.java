@@ -16,34 +16,35 @@
 
 package com.thoughtworks.go.domain;
 
-import java.io.File;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-
 import com.thoughtworks.go.config.CaseInsensitiveString;
 import com.thoughtworks.go.config.materials.Materials;
+import com.thoughtworks.go.config.materials.PackageMaterial;
 import com.thoughtworks.go.config.materials.ScmMaterial;
 import com.thoughtworks.go.config.materials.dependency.DependencyMaterial;
 import com.thoughtworks.go.config.materials.git.GitMaterial;
+import com.thoughtworks.go.config.materials.mercurial.HgMaterial;
+import com.thoughtworks.go.config.materials.svn.SvnMaterial;
+import com.thoughtworks.go.config.materials.tfs.TfsMaterial;
 import com.thoughtworks.go.domain.materials.*;
 import com.thoughtworks.go.domain.materials.dependency.DependencyMaterialRevision;
 import com.thoughtworks.go.domain.materials.git.GitMaterialUpdater;
+import com.thoughtworks.go.domain.materials.mercurial.HgMaterialUpdater;
+import com.thoughtworks.go.domain.materials.svn.SvnMaterialUpdater;
+import com.thoughtworks.go.domain.materials.tfs.TfsMaterialUpdater;
 import com.thoughtworks.go.util.ObjectUtil;
 import com.thoughtworks.go.util.command.EnvironmentVariableContext;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.Serializable;
+import java.util.*;
 
 import static com.thoughtworks.go.util.ExceptionUtils.bombIfNull;
 
 // Understands multiple materials each with their own revision
 public class MaterialRevisions implements Serializable, Iterable<MaterialRevision> {
-    private static final Logger LOGGER = Logger.getLogger(MaterialRevisions.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(MaterialRevisions.class);
 
     public static final MaterialRevisions EMPTY = new MaterialRevisions();
     private List<MaterialRevision> revisions = new ArrayList<>();
@@ -375,9 +376,20 @@ public class MaterialRevisions implements Serializable, Iterable<MaterialRevisio
         List<BuildCommand> commands = new ArrayList<>();
         for (MaterialRevision revision : revisions) {
             Material material = revision.getMaterial();
-            if(material instanceof ScmMaterial) {
+            if (material instanceof ScmMaterial) {
                 if (material instanceof GitMaterial) {
                     GitMaterialUpdater updater = new GitMaterialUpdater((GitMaterial) material);
+                    commands.add(updater.updateTo(baseDir, revision.toRevisionContext()));
+                } else if (material instanceof HgMaterial) {
+                    HgMaterialUpdater updater = new HgMaterialUpdater((HgMaterial) material);
+                    commands.add(updater.updateTo(baseDir, revision.toRevisionContext()));
+                } else if (material instanceof SvnMaterial) {
+                    SvnMaterialUpdater updater = new SvnMaterialUpdater((SvnMaterial) material);
+                    commands.add(updater.updateTo(baseDir, revision.toRevisionContext()));
+                } else if (material instanceof PackageMaterial) {
+                    //do nothing
+                } else if (material instanceof TfsMaterial) {
+                    TfsMaterialUpdater updater = new TfsMaterialUpdater((TfsMaterial) material);
                     commands.add(updater.updateTo(baseDir, revision.toRevisionContext()));
                 } else {
                     commands.add(BuildCommand.fail("%s Material is not supported for new build command agent", material.getTypeForDisplay()));

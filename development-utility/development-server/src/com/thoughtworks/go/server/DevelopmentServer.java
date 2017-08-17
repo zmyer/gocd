@@ -19,12 +19,9 @@ package com.thoughtworks.go.server;
 import com.thoughtworks.go.logging.LogConfigurator;
 import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.SystemEnvironment;
-import com.thoughtworks.go.util.ZipUtil;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.WildcardFileFilter;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 
 import static com.thoughtworks.go.server.util.GoLauncher.DEFAULT_LOG4J_CONFIGURATION_FILE;
@@ -48,14 +45,8 @@ public class DevelopmentServer {
             throw new RuntimeException("No webapp found in " + webApp.getAbsolutePath());
         }
 
-        copyActivatorJarToClassPath();
+        assertActivationJarPresent();
         SystemEnvironment systemEnvironment = new SystemEnvironment();
-
-        String chosenAppServer = System.getProperty(SystemEnvironment.APP_SERVER.propertyName());
-        if (chosenAppServer == null || chosenAppServer.trim().isEmpty()) {
-            systemEnvironment.set(SystemEnvironment.APP_SERVER, SystemEnvironment.JETTY9);
-        }
-
         systemEnvironment.setProperty(GENERATE_STATISTICS, "true");
 
         systemEnvironment.setProperty(SystemEnvironment.PARENT_LOADER_PRIORITY, "true");
@@ -63,21 +54,18 @@ public class DevelopmentServer {
         systemEnvironment.set(SystemEnvironment.PLUGIN_LOCATION_MONITOR_INTERVAL_IN_SECONDS, 5);
 
         systemEnvironment.set(SystemEnvironment.DEFAULT_PLUGINS_ZIP, "/plugins.zip");
+        systemEnvironment.set(SystemEnvironment.PLUGIN_ACTIVATOR_JAR_PATH, "go-plugin-activator.jar");
         systemEnvironment.setProperty(GoConstants.I18N_CACHE_LIFE, "0"); //0 means reload when stale
         systemEnvironment.set(SystemEnvironment.GO_SERVER_MODE, "development");
         setupPeriodicGC(systemEnvironment);
-        File pluginsDist = new File("../tw-go-plugins/dist/");
-        if (!pluginsDist.exists()) {
-            pluginsDist.mkdirs();
-        }
-        new ZipUtil().zipFolderContents(pluginsDist, new File(classpath(), "plugins.zip"));
+        assertPluginsZipExists();
         GoServer server = new GoServer();
         systemEnvironment.setProperty(GoConstants.USE_COMPRESSED_JAVASCRIPT, Boolean.toString(false));
         try {
             server.startServer();
 
             String hostName = systemEnvironment.getListenHost();
-            if(hostName == null){
+            if (hostName == null) {
                 hostName = "localhost";
             }
 
@@ -86,6 +74,12 @@ public class DevelopmentServer {
         } catch (Exception e) {
             System.err.println("Failed to start Go server. Exception:");
             e.printStackTrace();
+        }
+    }
+
+    private static void assertPluginsZipExists() throws IOException, InterruptedException {
+        if (DevelopmentServer.class.getResource("/plugins.zip") == null) {
+            throw new IllegalArgumentException("Could not find plugins.zip. Hint: Did you run `./gradlew prepare`?");
         }
     }
 
@@ -104,18 +98,10 @@ public class DevelopmentServer {
         }
     }
 
-    private static void copyActivatorJarToClassPath() throws IOException {
-        File activatorJar = new File("../plugin-infra/go-plugin-activator/target/libs/").listFiles((FileFilter) new WildcardFileFilter("go-plugin-activator-*.jar"))[0];
-        new SystemEnvironment().set(SystemEnvironment.PLUGIN_ACTIVATOR_JAR_PATH, "go-plugin-activator.jar");
-
-        if (activatorJar.exists()) {
-            FileUtils.copyFile(activatorJar, new File(classpath(), "go-plugin-activator.jar"));
-        } else {
-            System.err.println("Could not find plugin activator jar, Plugin framework will not be loaded.");
+    private static void assertActivationJarPresent() throws IOException {
+        if (DevelopmentServer.class.getResource("/go-plugin-activator.jar") == null) {
+            System.err.println("Could not find plugin activator jar, Plugin framework will not be loaded. Hint: Did you run `./gradlew prepare`?");
         }
     }
 
-    private static File classpath() {
-        return new File("target/classes/main");
-    }
 }

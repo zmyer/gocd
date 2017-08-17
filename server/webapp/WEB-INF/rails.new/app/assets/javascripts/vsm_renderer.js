@@ -262,6 +262,9 @@ Graph_Renderer = function (container) {
         var instancesCount;
         if (node.instances != null && node.instances != undefined) {
             gui += '<h3 title="' + node.name + '"><a href="' + node.locator + '">' + node.name + '</a></h3>';
+            if(node.can_edit) {
+                gui += '<div class="pipeline_actions"> <a class="icon16 setting" href="'+ node.edit_path + '"></a> </div>'
+            }
             if (node.instances != undefined && node.instances.length > 0 && node.instances[0].stages) {
                 gui += '<ul class="instances">';
                 for (var i = 0; i < node.instances.length; i++) {
@@ -335,7 +338,11 @@ Graph_Renderer = function (container) {
                     gui += '" style="width:' + ((stagesWidth - (stagesCount * 4)) / stagesCount) + 'px" title="' + instance.stages[i].name + '"><span>' + instance.stages[i].name + '</span></li>'
                 }
                 else {
-                    gui += '" style="width:' + ((stagesWidth - (stagesCount * 4)) / stagesCount) + 'px" title="' + instance.stages[i].name + '"><span><span></span></span><a href="' + instance.stages[i].locator + '"><span>' + instance.stages[i].name + '</span></a></li>'
+                  var stageTitle = instance.stages[i].name;
+                  if(_.toInteger(instance.stages[i].duration) > 0){
+                    stageTitle += ' (took ' + moment.duration(instance.stages[i].duration, 's').humanizeForGoCD() + ')';
+                  }
+                  gui += '" style="width:' + ((stagesWidth - (stagesCount * 4)) / stagesCount) + 'px" title="' + stageTitle + '"><span><span></span></span><a href="' + instance.stages[i].locator + '"><span>' + instance.stages[i].name + '</span></a></li>'
                 }
             }
             gui += '</ul>';

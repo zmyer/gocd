@@ -30,12 +30,10 @@ import com.thoughtworks.go.helper.StageConfigMother;
 import com.thoughtworks.go.i18n.LocalizedMessage;
 import com.thoughtworks.go.i18n.Localizer;
 import com.thoughtworks.go.presentation.ConfigForEdit;
-import com.thoughtworks.go.security.GoCipher;
 import com.thoughtworks.go.server.dao.DatabaseAccessHelper;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.service.result.HttpLocalizedOperationResult;
 import com.thoughtworks.go.server.service.result.LocalizedOperationResult;
-import com.thoughtworks.go.service.ConfigRepository;
 import com.thoughtworks.go.util.GoConfigFileHelper;
 import com.thoughtworks.go.util.ReflectionUtil;
 import org.junit.After;
@@ -64,14 +62,11 @@ import static org.junit.Assert.assertThat;
         "classpath:WEB-INF/applicationContext-acegi-security.xml"
 })
 public class GoConfigServiceIntegrationTest {
-    @Autowired private SecurityService securityService;
     @Autowired private GoConfigDao goConfigDao;
     @Autowired private GoConfigService goConfigService;
     @Autowired private DatabaseAccessHelper dbHelper;
     @Autowired private Localizer localizer;
-    @Autowired private ConfigRepository configRepo;
     @Autowired private CachedGoConfig cachedGoConfig;
-    @Autowired private ServerConfigService serverConfigService;
 
     private GoConfigFileHelper configHelper;
 
@@ -110,7 +105,7 @@ public class GoConfigServiceIntegrationTest {
     }
 
     @Test
-    public void shouldOnlyAllowAdminsToGetPipelineConfig() {
+    public void shouldOnlyAllowAdminsToGetPipelineConfig() throws IOException {
         setupSecurity();
 
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
@@ -131,7 +126,7 @@ public class GoConfigServiceIntegrationTest {
     }
 
     @Test
-    public void shouldReturn404WhenUserIsNotAnAdminAndTriesToLoadANonExistentPipeline() {
+    public void shouldReturn404WhenUserIsNotAnAdminAndTriesToLoadANonExistentPipeline() throws IOException {
         setupSecurity();
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         ConfigForEdit configForEdit = goConfigService.loadForEdit("non-existent-pipeline", new Username(new CaseInsensitiveString("loser")), result);
@@ -140,10 +135,9 @@ public class GoConfigServiceIntegrationTest {
         assertThat(result.message(localizer), is("pipeline 'non-existent-pipeline' not found."));
     }
 
-    private void setupSecurity() {
-        SecurityConfig securityConfig = new SecurityConfig(new LdapConfig(new GoCipher()), new PasswordFileConfig("foo"), false);
-        securityConfig.adminsConfig().add(new AdminUser(new CaseInsensitiveString("root")));
-        configHelper.addSecurity(securityConfig);
+    private void setupSecurity() throws IOException {
+        configHelper.enableSecurity();
+        configHelper.addAdmins("root");
         configHelper.addPipeline("my-pipeline", "my-stage");
         configHelper.setAdminPermissionForGroup(BasicPipelineConfigs.DEFAULT_GROUP, "pipeline_admin");
     }
@@ -178,7 +172,7 @@ public class GoConfigServiceIntegrationTest {
 
     @Test
     public void shouldReturn401WhenAUserIsNotAnAdmin() throws IOException {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("hero");
 
         configHelper.addTemplate("pipeline", "stage");
@@ -196,7 +190,7 @@ public class GoConfigServiceIntegrationTest {
 
     @Test
     public void shouldReturnANewCopyOfConfigForEditWhenAUserIsATemplateAdmin() throws IOException {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("hero");
 
         configHelper.addTemplate("pipeline", new Authorization(new AdminsConfig(new AdminUser(new CaseInsensitiveString("template-admin")))), "stage");
@@ -213,7 +207,7 @@ public class GoConfigServiceIntegrationTest {
 
     @Test
     public void shouldReturnANewCopyOfConfigForEditWhenLoadingForEdit() throws IOException {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("hero");
 
         configHelper.addTemplate("pipeline", "stage");
@@ -278,7 +272,7 @@ public class GoConfigServiceIntegrationTest {
 
     @Test
     public void shouldErrorOutWhenUserIsNotAuthorizedToLoadGroupForEdit() throws IOException {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("hero");
         configHelper.addPipelineWithGroup("group_one", "pipeline", "stage", "my_job");
 
@@ -737,7 +731,7 @@ public class GoConfigServiceIntegrationTest {
         assertThat(config.getMd5(), is(md5BeforeAddingGroupAtBeginning));
         assertThat(result.isSuccessful(), is(false));
         assertThat(result.httpCode(), is(SC_CONFLICT));
-        assertThat(result.message(localizer), is("Save failed. Duplicate unique value [first_group] declared for identity constraint \"uniquePipelines\" of element \"cruise\"."));
+        assertThat(result.message(localizer), is("Save failed. Duplicate unique value [first_group] declared for identity constraint of element \"cruise\"."));
     }
 
     @Test

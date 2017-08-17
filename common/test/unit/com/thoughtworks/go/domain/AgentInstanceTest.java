@@ -25,7 +25,6 @@ import com.thoughtworks.go.server.service.AgentBuildingInfo;
 import com.thoughtworks.go.server.service.AgentRuntimeInfo;
 import com.thoughtworks.go.util.SystemEnvironment;
 import org.apache.commons.io.FileUtils;
-import org.hamcrest.core.Is;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -323,16 +322,19 @@ public class AgentInstanceTest {
     }
 
     @Test
-    public void shouldNotRefreshDeniedAgent() throws Exception {
+    public void shouldRefreshDisabledAgent() throws Exception {
         agentConfig.disable();
         AgentInstance instance = AgentInstance.createFromConfig(agentConfig, new SystemEnvironment() {
             public int getAgentConnectionTimeout() {
                 return -1;
             }
         });
-        instance.update(new AgentRuntimeInfo(agentConfig.getAgentIdentifier(), AgentRuntimeStatus.Idle, currentWorkingDirectory(), "cookie", false));
+        instance.update(new AgentRuntimeInfo(agentConfig.getAgentIdentifier(), AgentRuntimeStatus.Building, currentWorkingDirectory(), "cookie", false));
+
         instance.refresh(null);
-        assertThat(instance.getStatus().getRuntimeStatus(), is(not(AgentRuntimeStatus.LostContact)));
+
+        assertThat(instance.getRuntimeStatus(), is(AgentRuntimeStatus.LostContact));
+        assertThat(instance.getStatus(), is(AgentStatus.Disabled));
     }
 
     @Test

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,8 +45,10 @@ import com.thoughtworks.go.util.*;
 import com.thoughtworks.go.util.command.UrlArgument;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
 import org.hamcrest.core.Is;
 import org.jdom2.input.JDOMParseException;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -80,6 +82,12 @@ public class MagicalGoConfigXmlWriterTest {
         ConfigCache configCache = new ConfigCache();
         xmlWriter = new MagicalGoConfigXmlWriter(configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
         xmlLoader = new MagicalGoConfigXmlLoader(configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
+        new SystemEnvironment().set(SystemEnvironment.INBUILT_LDAP_PASSWORD_AUTH_ENABLED, true);
+    }
+
+    @After
+    public void tearDown() throws Exception {
+        new SystemEnvironment().set(SystemEnvironment.INBUILT_LDAP_PASSWORD_AUTH_ENABLED, false);
     }
 
     @Test
@@ -191,7 +199,7 @@ public class MagicalGoConfigXmlWriterTest {
     public void shouldWriteConfigRepos() throws Exception {
         CruiseConfig config = GoConfigMother.configWithConfigRepo();
         xmlWriter.write(config, output, false);
-        assertThat(output.toString(), containsString("<config-repo plugin=\"myplugin\">"));
+        assertThat(output.toString(), containsString("<config-repo plugin=\"myplugin\" id=\"id2\">"));
         assertThat(output.toString(), containsString("<git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />"));
     }
 
@@ -777,7 +785,7 @@ public class MagicalGoConfigXmlWriterTest {
             xmlWriter.write(cruiseConfig, output, false);
             fail();
         } catch (Exception e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [passed] declared for identity constraint \"uniqueRunIfTypeForExec\" of element \"exec\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [passed] declared for identity constraint of element \"exec\"."));
         }
     }
 
@@ -903,7 +911,7 @@ public class MagicalGoConfigXmlWriterTest {
             xmlWriter.write(configToSave, output, false);
             fail("should not have allowed two repositories with same id");
         } catch (XsdValidationException e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [id] declared for identity constraint \"uniqueRepositoryId\" of element \"repositories\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [id] declared for identity constraint of element \"repositories\"."));
         }
     }
 
@@ -923,7 +931,7 @@ public class MagicalGoConfigXmlWriterTest {
             xmlWriter.write(configToSave, output, false);
             fail("should not have allowed two package repositories with same id");
         } catch (XsdValidationException e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [id] declared for identity constraint \"uniquePackageId\" of element \"cruise\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [id] declared for identity constraint of element \"cruise\"."));
         }
     }
 
@@ -1134,7 +1142,22 @@ public class MagicalGoConfigXmlWriterTest {
         assertThat(writtenConfigXml, not(containsString("<authorization>")));
     }
 
+    @Test(timeout = 1000)
+    public void shouldValidateLeadingAndTrailingSpacesOnExecCommandInReasonableTime() throws Exception {
+        // See https://github.com/gocd/gocd/issues/3551
+        // This is only reproducible on longish strings, so don't try shortening the exec task length...
+        String longPath = StringUtils.repeat("f", 100);
+        CruiseConfig config = GoConfigMother.configWithPipelines("pipeline1");
+        config.findJob("pipeline1", "stage", "job").addTask(new ExecTask(longPath + " ", "arg1", (String) null));
 
+        output = new ByteArrayOutputStream();
+        try {
+            xmlWriter.write(config, output, false);
+            fail("expected to blow up");
+        }catch (XsdValidationException e){
+            assertThat(e.getMessage(), containsString("should conform to the pattern - \\S(.*\\S)?"));
+        }
+    }
 
     @Test
     public void shouldDisplayTheFlagInXmlIfTemplateAuthorizationDoesNotAllowGroupAdmins() throws Exception {

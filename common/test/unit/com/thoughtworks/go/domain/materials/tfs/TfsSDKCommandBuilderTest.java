@@ -1,23 +1,24 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 
 package com.thoughtworks.go.domain.materials.tfs;
 
 import com.thoughtworks.go.util.NestedJarClassLoader;
 import com.thoughtworks.go.util.command.UrlArgument;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.io.IOUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -89,8 +90,7 @@ public class TfsSDKCommandBuilderTest {
     private URL getLog4jJarFromClasspath() throws URISyntaxException {
         URLClassLoader classLoader = (URLClassLoader) this.getClass().getClassLoader();
         for (URL u : classLoader.getURLs()) {
-            String jarPath = u.getPath();
-            if (jarPath.endsWith(".jar") && jarPath.contains("log4j")) {
+            if (FilenameUtils.getExtension(u.getPath()).equals("jar") && FilenameUtils.getName(u.getPath()).startsWith("log4j-")) {
                 return u;
             }
         }

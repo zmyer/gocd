@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,8 @@ public class ScheduleServiceSecurityTest {
 
     @Test
     public void shouldReturnAppropriateHttpResultIfUserDoesNotHaveOperatePermission() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
+        configHelper.enableSecurity();
+        configHelper.addAdmins("admin");
         configHelper.setOperatePermissionForGroup("defaultGroup", "jez");
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageRunning();
         Username anonymous = new Username(new CaseInsensitiveString("anonymous"));
@@ -91,7 +92,7 @@ public class ScheduleServiceSecurityTest {
 
     @Test
     public void shouldReturnAppropriateHttpResultIfTheStageIsInvalid() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
+        configHelper.enableSecurity();
         configHelper.setOperatePermissionForGroup("defaultGroup", "jez");
         Username jez = new Username(new CaseInsensitiveString("jez"));
         HttpLocalizedOperationResult operationResult = new HttpLocalizedOperationResult();
@@ -104,7 +105,7 @@ public class ScheduleServiceSecurityTest {
 
     @Test
     public void shouldReturnAppropriateHttpResultIfThePipelineAndStageNameAreInvalid() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
+        configHelper.enableSecurity();
         configHelper.setOperatePermissionForGroup("defaultGroup", "jez");
         Username jez = new Username(new CaseInsensitiveString("jez"));
         HttpLocalizedOperationResult operationResult = new HttpLocalizedOperationResult();
@@ -117,7 +118,7 @@ public class ScheduleServiceSecurityTest {
 
     @Test
     public void shouldNotThrowExceptionIfUserHasOperatePermission() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
+        configHelper.enableSecurity();
         Username user = UserHelper.getUserName();
         configHelper.setOperatePermissionForGroup("defaultGroup", user.getUsername().toString());
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageRunning();
@@ -138,7 +139,7 @@ public class ScheduleServiceSecurityTest {
 
     @Test
     public void shouldCancelStageGivenValidPipelineAndStageName() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
+        configHelper.enableSecurity();
         Username user = UserHelper.getUserName();
         configHelper.setOperatePermissionForGroup("defaultGroup", user.getUsername().toString());
         Pipeline pipeline = fixture.createPipelineWithFirstStagePassedAndSecondStageRunning();

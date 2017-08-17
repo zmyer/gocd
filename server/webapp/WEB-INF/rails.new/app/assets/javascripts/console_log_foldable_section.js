@@ -30,8 +30,9 @@
   function LineWriter() {
 
     var cmd_re = /^(\s*\[go] (?:On Cancel )?Task: )(.*)/,
-        status_re = /^(\s*\[go] (?:Current job|Task) status: )(.*)/,
-        ansi = new ANSIColors();
+        status_re = /^(\s*\[go] (?:Current job|Task) status: )(?:(\w+)(?: \((\d+) ms\))?(?: \(exit code: (\d+)\))?.*)$/,
+        ansi = new AnsiUp(),
+        formatter = new AnsiFormatter();
 
     function isTaskLine(prefix) {
       return [Types.TASK_START, Types.CANCEL_TASK_START].indexOf(prefix) > -1;
@@ -41,8 +42,8 @@
       return [Types.PASS, Types.FAIL, Types.CANCELLED, Types.JOB_PASS, Types.JOB_FAIL, Types.CANCEL_TASK_PASS, Types.CANCEL_TASK_FAIL].indexOf(prefix) > -1;
     }
 
-    function formatContent(node, prefix, line) {
-      var parts;
+    function formatContent(cursor, node, prefix, line) {
+      var parts, duration, result, exitCode;
 
       if (isTaskLine(prefix)) {
         parts = line.match(cmd_re);
@@ -50,7 +51,23 @@
       } else if (isStatusLine(prefix)) {
         parts = line.match(status_re);
         if (parts) {
-          c(node, parts[1], c("code", parts[2]));
+          result = parts[2];
+
+          if (parts[3] && !isNaN(parseInt(parts[3], 10))) {
+            duration = parseInt(parts[3], 10);
+            cursor.annotate("duration", duration);
+
+            result += ", took: " + humanizeMilliseconds(duration);
+          }
+
+          if (parts[4] && !isNaN(parseInt(parts[4], 10))) {
+            exitCode = parseInt(parts[4], 10);
+            cursor.annotate("exitCode", exitCode);
+
+            result += ", exited: " + exitCode;
+          }
+
+          c(node, parts[1], c("code", result));
         } else {
           c(node, line); // Usually the end of an onCancel task
         }
@@ -58,42 +75,63 @@
         if ("" === $.trim(line)) {
           c(node, "\n");
         } else {
-          c(node, ansi.process(line));
+          c(node, ansi.ansi_to(line, formatter));
         }
       }
     }
 
-    function insertBasic(cursor, line) {
-      var output = c("dd", {class: "log-fs-line"}, ansi.process(line));
-
-      cursor.write(output);
-      return output;
+    function humanizeMilliseconds(duration) {
+      var d = moment.duration(duration, "ms");
+      return d.humanizeForGoCD();
     }
 
-    function insertHeader(cursor, prefix, line) {
-      var header = c("dt", {"class": "log-fs-line log-fs-line-" + ReverseTypes[prefix]});
+    function insertPlain(cursor, timestamp, line) {
+      var node = c("dd", {class: "log-fs-line", "data-timestamp": timestamp}, ansi.ansi_to(line, formatter));
 
-      formatContent(header, prefix, line);
-      cursor.write(header);
-      return header;
+      cursor.write(node);
+      return node;
     }
 
-    function insertLine(cursor, prefix, line) {
-      var output = c("div", {"class": "log-fs-line log-fs-line-" + ReverseTypes[prefix]});
+    function insertHeader(cursor, prefix, timestamp, line) {
+      var node = c("dt", {"class": "log-fs-line log-fs-line-" + ReverseTypes[prefix], "data-timestamp": timestamp});
 
-      formatContent(output, prefix, line);
-      cursor.writeBody(output);
-
-      return output;
+      formatContent(cursor, node, prefix, line);
+      cursor.writeHeader(node);
+      return node;
     }
 
+    function insertContent(cursor, prefix, timestamp, line) {
+      var node = c("div", {"class": "log-fs-line log-fs-line-" + ReverseTypes[prefix], "data-timestamp": timestamp});
+
+      formatContent(cursor, node, prefix, line);
+      cursor.writeBody(node);
+      return node;
+    }
+
+    function markWithAnnotations(cursor, annotations) {
+      var node = cursor.header();
+
+      if (!node) {
+        return;
+      }
+
+      if ("number" === typeof annotations.duration) {
+        node.appendChild(c("span", {class: "log-fs-duration"}, "took: " + humanizeMilliseconds(annotations.duration)));
+      }
+
+      if ("number" === typeof annotations.exitCode) {
+        node.appendChild(c("span", {class: "log-fs-exitcode"}, "exited: " + annotations.exitCode));
+      }
+    }
+
+    this.markWithAnnotations = markWithAnnotations;
     this.insertHeader = insertHeader;
-    this.insertLine = insertLine;
-    this.insertBasic = insertBasic;
+    this.insertContent = insertContent;
+    this.insertPlain = insertPlain;
   }
 
   function SectionCursor(node, section) {
-    var cursor;
+    var cursor, self = this;
 
     if (!section) section = blankSectionElement();
 
@@ -129,8 +167,20 @@
       cursor.appendChild(childNode);
     }
 
+    function writeHeader(childNode) {
+      section.priv.header = childNode;
+      cursor.appendChild(childNode);
+    }
+
     function writeBody(childNode) {
       cursor.body.appendChild(childNode);
+    }
+
+    function annotate(key, value) {
+      if (!section.priv.meta) {
+        section.priv.meta = {};
+      }
+      section.priv.meta[key] = value;
     }
 
     function type() {
@@ -139,6 +189,10 @@
 
     function getSection() {
       return section;
+    }
+
+    function getHeader() {
+      return section.priv.header;
     }
 
     function markMultiline() {
@@ -150,9 +204,13 @@
       }
     }
 
-    function onFinishSection() {
+    function onFinishSection(writer) {
       if (!section.priv.errored) {
         section.classList.remove("open");
+      }
+
+      if ("undefined" !== typeof section.priv.meta && writer) {
+        writer.markWithAnnotations(self, section.priv.meta);
       }
     }
 
@@ -236,9 +294,9 @@
       return [Types.PASS, Types.FAIL, Types.CANCELLED, Types.JOB_PASS, Types.JOB_FAIL, Types.CANCEL_TASK_PASS, Types.CANCEL_TASK_FAIL].indexOf(prefix) > -1;
     }
 
-    function closeAndStartNew(parentNode) {
+    function closeAndStartNew(parentNode, writer) {
       // close section and start a new one
-      onFinishSection();
+      onFinishSection(writer);
 
       return addAnotherCursor(parentNode);
     }
@@ -250,14 +308,17 @@
 
     this.type = type;
     this.assignType = assignType;
+    this.annotate = annotate;
     this.isPartOfSection = isPartOfSection;
     this.isExplicitEndBoundary = isExplicitEndBoundary;
     this.closeAndStartNew = closeAndStartNew;
 
     this.write = write;
+    this.writeHeader = writeHeader;
     this.writeBody = writeBody;
 
     this.element = getSection;
+    this.header = getHeader;
     this.cloneTo = cloneTo;
   }
 

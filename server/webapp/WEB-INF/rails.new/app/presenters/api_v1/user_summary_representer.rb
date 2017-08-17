@@ -20,7 +20,11 @@ module ApiV1
     alias_method :login_name, :represented
 
     link :doc do
-      'https://api.gocd.io/#users'
+      'https://api.gocd.org/#users'
+    end
+
+    link :current_user do |opts|
+      opts[:url_builder].apiv1_current_user_url
     end
 
     link :self do |opts|

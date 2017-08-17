@@ -16,44 +16,14 @@
 module ApiV3
   module Plugin
     class BasePluginInfoRepresenter < BaseRepresenter
-      alias_method :plugin, :represented
 
-      link :self do |opts|
-        opts[:url_builder].apiv3_admin_plugin_info_url(id)
-      end
+      property :plugin_settings,
+               skip_nil: true,
+               expect_hash: true,
+               inherit: false,
+               class: com.thoughtworks.go.plugin.domain.common.PluggableInstanceSettings,
+               decorator: PluggableInstanceSettingsRepresenter
 
-      link :doc do |opts|
-        'https://api.gocd.io/#plugin-info'
-      end
-
-      link :find do |opts|
-        opts[:url_builder].apiv3_admin_plugin_info_url(id: '__plugin_id__').gsub(/__plugin_id__/, ':plugin_id')
-      end
-
-      property :id, exec_context: :decorator
-      property :version, exec_context: :decorator
-      property :getExtensionName, as: :type
-
-      property :about, exec_context: :decorator do
-        property :name
-        property :version
-        property :target_go_version
-        property :description
-        property :target_operating_systems, getter: lambda { |opts| self.target_operating_systems.to_a }
-
-        property :vendor do
-          property :name
-          property :url
-        end
-      end
-
-      protected
-
-      delegate :id, :version, :about, to: :descriptor
-
-      def descriptor
-        plugin.getDescriptor()
-      end
     end
   end
 end

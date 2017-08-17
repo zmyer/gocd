@@ -21,11 +21,11 @@ import org.junit.Test;
 import java.util.List;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.*;
 
 public class RolesConfigTest {
 
@@ -96,6 +96,21 @@ public class RolesConfigTest {
     }
 
     @Test
+    public void shouldBeAbleToFetchPluginRolesForAAuthConfig() throws Exception {
+        PluginRoleConfig admin = new PluginRoleConfig("admin", "corporate_ldap");
+        PluginRoleConfig view = new PluginRoleConfig("view", "corporate_ldap");
+        PluginRoleConfig operator = new PluginRoleConfig("operator", "internal_ldap");
+
+        RolesConfig rolesConfig = new RolesConfig(admin, view, operator, new RoleConfig(new CaseInsensitiveString("committer")));
+
+        assertThat(rolesConfig.pluginRoleConfigsFor("corporate_ldap"), hasSize(2));
+        assertThat(rolesConfig.pluginRoleConfigsFor("corporate_ldap"), containsInAnyOrder(admin, view));
+
+        assertThat(rolesConfig.pluginRoleConfigsFor("internal_ldap"), hasSize(1));
+        assertThat(rolesConfig.pluginRoleConfigsFor("internal_ldap"), containsInAnyOrder(operator));
+    }
+
+    @Test
     public void getRoleConfigsShouldReturnOnlyNonPluginRoles() {
         Role admin = new RoleConfig(new CaseInsensitiveString("admin"));
         Role view = new RoleConfig(new CaseInsensitiveString("view"));
@@ -123,5 +138,23 @@ public class RolesConfigTest {
 
         assertThat(roles, hasSize(4));
         assertThat(roles, contains(admin, blackbird, view, spacetiger));
+    }
+
+    @Test
+    public void isUniqueRoleName_shouldBeTrueIfRolesAreUnique() throws Exception {
+        RolesConfig rolesConfig = new RolesConfig(new RoleConfig(new CaseInsensitiveString("admin")),
+                new RoleConfig(new CaseInsensitiveString("view")));
+
+        assertTrue(rolesConfig.isUniqueRoleName(new CaseInsensitiveString("admin")));
+        assertTrue(rolesConfig.isUniqueRoleName(new CaseInsensitiveString("operate")));
+    }
+
+    @Test
+    public void isUniqueRoleName_shouldBeFalseWithMultipleRolesWithSameName() throws Exception {
+        RolesConfig rolesConfig = new RolesConfig(new RoleConfig(new CaseInsensitiveString("admin")),
+                new RoleConfig(new CaseInsensitiveString("view")),
+                new RoleConfig(new CaseInsensitiveString("view")));
+
+        assertFalse(rolesConfig.isUniqueRoleName(new CaseInsensitiveString("view")));
     }
 }

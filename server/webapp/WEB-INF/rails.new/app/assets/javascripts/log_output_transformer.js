@@ -30,9 +30,21 @@
 
       var section = $(e.currentTarget).closest(".foldable-section");
       section.toggleClass("open");
+      consoleElement.trigger("consoleInteraction");
     });
 
     var loading = consoleElement.siblings(".console-log-loading");
+
+    function removeLoadingBar() {
+      if (loading) {
+        loading.remove();
+        loading = null;
+      }
+    }
+
+    consoleElement.on("consoleCompleted", function () {
+      removeLoadingBar();
+    });
 
     function injectFragment(fragment, parentElement) {
       if (!!fragment.childNodes.length) {
@@ -42,19 +54,33 @@
       }
     }
 
+    function enqueue(fn, args) {
+      deferred.push([fn, args]);
+    }
+
     function dequeue() {
-      var lines;
-      while (lines = deferred.shift()) {
-        buildDomFromLogs(lines);
+      var entry; // entry is [fn, args]
+      while (entry = deferred.shift()) {
+        entry[0].apply(self, entry[1]);
       }
       deferTransform = !consoleElement.is(":visible");
     }
 
-    function buildDomFromLogs(logLines) {
-      if (loading) {
-        loading.remove();
-        loading = null;
+    function invokeOrDefer(callback, args) {
+      args = "undefined" === typeof args ? [] : args;
+
+      if (deferTransform) {
+        enqueue(callback, args);
+        return;
       }
+
+      dequeue();
+
+      callback.apply(self, args);
+    }
+
+    function buildDomFromLogs(logLines) {
+      removeLoadingBar();
 
       var rawLine, match, continuedSection;
       var residual, queue;
@@ -98,23 +124,23 @@
 
           if (!currentSection.type()) {
             currentSection.assignType(prefix);
-            currentLine = writer.insertHeader(currentSection, prefix, line);
+            currentLine = writer.insertHeader(currentSection, prefix, timestamp, line);
 
             if (currentSection.isExplicitEndBoundary(prefix)) {
-              currentSection = currentSection.closeAndStartNew(queue);
+              currentSection = currentSection.closeAndStartNew(queue, writer);
             }
           } else if (currentSection.isPartOfSection(prefix)) {
             currentSection.markMultiline();
-            currentLine = writer.insertLine(currentSection, prefix, line);
+            currentLine = writer.insertContent(currentSection, prefix, timestamp, line);
 
             if (currentSection.isExplicitEndBoundary(prefix)) {
-              currentSection = currentSection.closeAndStartNew(queue);
+              currentSection = currentSection.closeAndStartNew(queue, writer);
             }
           } else {
-            currentSection = currentSection.closeAndStartNew(queue);
+            currentSection = currentSection.closeAndStartNew(queue, writer);
 
             currentSection.assignType(prefix);
-            currentLine = writer.insertHeader(currentSection, prefix, line);
+            currentLine = writer.insertHeader(currentSection, prefix, timestamp, line);
           }
         } else {
 
@@ -125,26 +151,19 @@
             timestamp = "", line = rawLine;
           }
 
-          currentLine = writer.insertBasic(currentSection, line);
+          currentLine = writer.insertPlain(currentSection, timestamp, line);
         }
-
-        currentLine.setAttribute("data-timestamp", timestamp);
       }
 
       flushToDOM();
     }
 
+
     self.transform = function buildOrDeferLogLines(logLines) {
-      if (deferTransform) {
-        deferred.push(logLines);
-        return;
-      }
-
-      dequeue();
-
-      buildDomFromLogs(logLines);
+      invokeOrDefer(buildDomFromLogs, [logLines]);
     };
 
+    self.invoke = invokeOrDefer;
     self.dequeue = dequeue;
   }
 

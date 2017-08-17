@@ -2,14 +2,14 @@
   <%= hidden_field_tag("server_time", Time.now.to_i, :id => "server_timestamp") -%>
         <ul class="user">
           <li class="help">
-            <%= link_to(l.string("HELP_SMALL"), "https://gocd.io/help", :target => "_blank") %>
+            <%= link_to(l.string("HELP_SMALL"), "https://gocd.org/help", :target => "_blank") %>
           </li>
           <% unless @user.anonymous? %>
             <li class="current_user icon">
                 <a href="#" class="current_user_name dropdown-arrow-icon"><%= @user.display_name %></a>
                 <ul class='enhanced_dropdown hidden'>
                     <li>
-                        <%= link_to l.string('PREFERENCES_LOWER'), url_for_path('/tab/mycruise/user') %>
+                        <%= link_to l.string('PREFERENCES_LOWER'), preferences_notifications_path %>
                     </li>
                     <li class="logout">
                         <%= link_to l.string('Sign out'), url_for_path('auth/logout'), :id => "nav-logout", :class => "sign_out" %>
@@ -24,7 +24,7 @@
             <span class="bell"></span>
             <div class="hover-container">
                 <div class="hover">
-                    <span>A new release of GoCD - <a href="https://www.gocd.io/download/" target="_blank"><%= go_update %></a> is available.</span>
+                    <span>A new release of GoCD - <a href="https://www.gocd.org/download/" target="_blank"><%= go_update %></a> is available.</span>
                 </div>
             </div>
         </div>
@@ -55,7 +55,9 @@
                     <%- elsif is_user_a_group_admin? -%>
                         <%= render :partial => 'shared/dropdown_pipeline_group_admin.html' -%>
                     <%- elsif is_user_authorized_to_view_templates? -%>
-                        <%= render :partial => 'shared/dropdown_template_admin.html' -%>
+                      <li role="presentation">
+                        <%= link_to "Templates", templates_path -%>
+                      </li>
                     <%- end -%>
                 </ul>
             <% end -%>

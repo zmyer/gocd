@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,17 @@
 import groovy.io.FileType
 
 import java.security.SecureRandom
+
+buildscript {
+  repositories {
+    jcenter()
+  }
+
+  dependencies {
+    classpath 'org.owasp:dependency-check-gradle:1.4.5.1'
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
+  }
+}
 
 def script = this
 
@@ -52,7 +63,7 @@ def getVersion = { ... args ->
       errorOutput = stdout
       ignoreExitValue = true
     }
-  } catch (Exception e){
+  } catch (Exception e) {
     return "could not determine version!"
   }
 
@@ -60,22 +71,19 @@ def getVersion = { ... args ->
 }
 
 ext.partitionFiles = { Collection originalFiles ->
-  // no partitioning needed!
-  if (!(System.getenv().containsKey('GO_JOB_RUN_COUNT') && System.getenv().containsKey('GO_JOB_RUN_INDEX'))) {
-    project.logger.log(LogLevel.WARN, "You're attempting to partition files without specifying both GO_JOB_RUN_COUNT and GO_JOB_RUN_INDEX.")
-    return originalFiles
-  }
-
-  Integer totalWorkers = System.getenv('GO_JOB_RUN_COUNT').toInteger()
-  Integer currentWorkerIndex = System.getenv('GO_JOB_RUN_INDEX').toInteger()
   def files = new LinkedHashSet(originalFiles).sort()
+  def seed = System.getenv('GO_PIPELINE_COUNTER')?.toInteger() ?: System.getenv('PARTITION_SEED')?.toInteger() ?: new SecureRandom().nextInt().abs()
+  def totalWorkers = System.getenv('GO_JOB_RUN_COUNT')?.toInteger() ?: 1
+  def currentWorkerIndex = System.getenv('GO_JOB_RUN_INDEX')?.toInteger() ?: 1
 
   Integer testsPerBucket = Math.ceil((double) files.size() / totalWorkers)
 
-  rootProject.logger.quiet("Partitioning ${files.size()} files into ${totalWorkers} buckets with approx ${testsPerBucket} files per bucket.")
+  rootProject.logger.quiet("Partitioning ${files.size()} files into ${totalWorkers} buckets with approx ${testsPerBucket} files per bucket. Using seed ${seed}.")
+  rootProject.logger.quiet("To reproduce the test failure, run with:")
+  rootProject.logger.quiet("PARTITION_SEED=${seed} GO_JOB_RUN_COUNT=${totalWorkers} GO_JOB_RUN_INDEX=${currentWorkerIndex} ./gradlew YOUR_TARGET")
 
   // random shuffle, every agent uses the same seed, so shuffling is predictable
-  Collections.shuffle(files, new Random(System.getenv('GO_PIPELINE_COUNTER').toInteger()))
+  Collections.shuffle(files, new Random(seed))
 
   def allPartitions = files.collate(testsPerBucket)
   allPartitions[currentWorkerIndex - 1]
@@ -83,12 +91,12 @@ ext.partitionFiles = { Collection originalFiles ->
 
 def COPYRIGHT_YEAR = '2017'
 def GO_VERSION_SEGMENTS = [
-  year         : 17,
-  releaseInYear: 4,
-  patch        : 0
+  year: 17,
+  releaseInYear: 9,
+  patch: 0
 ]
 def GO_VERSION = [GO_VERSION_SEGMENTS.year, GO_VERSION_SEGMENTS.releaseInYear, GO_VERSION_SEGMENTS.patch].join('.')
-def GO_VERSION_PREVIOUS = '17.3.0'
+def GO_VERSION_PREVIOUS = '17.8.0'
 def DIST_VERSION = releaseRevision()
 def GIT_REVISION = gitRevision()
 
@@ -109,10 +117,13 @@ if (System.getenv().containsKey("GO_SERVER_URL")) {
   println(" git: ${getVersion("git", "--version")}")
   println("  hg: ${getVersion("hg", "--quiet", "--version")}")
   println(" svn: ${getVersion("svn", "--quiet", "--version")}")
+  println("  p4: ${getVersion("p4", "-V").readLines().grep(~/Rev.*/).join()}")
+  println(" p4d: ${getVersion("p4d", "-V").readLines().grep(~/Rev.*/).join()}")
   println(" gcc: ${getVersion("gcc", "-dumpversion")}")
   println(" g++: ${getVersion("g++", "-dumpversion")}")
   println("============================")
 }
+
 
 allprojects {
   apply plugin: 'java'
@@ -149,7 +160,7 @@ allprojects {
 
     testOutput {
       extendsFrom testRuntime
-      transitive true
+      transitive = true
     }
   }
 
@@ -198,9 +209,12 @@ allprojects {
     }
   }
 
-  tasks.withType(Zip) {
+  tasks.withType(AbstractArchiveTask) {
     includeEmptyDirs false
     duplicatesStrategy 'exclude'
+
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
   }
 
   tasks.withType(Exec) {
@@ -217,7 +231,7 @@ allprojects {
     options.encoding = "UTF-8"
   }
 
-  task testJar(type: Jar, dependsOn: 'jar', description: "Assembles a jar archive containing the test classes.") {
+  task testJar(type: Jar, description: "Assembles a jar archive containing the test classes.") {
     classifier = 'tests'
     from sourceSets.test.output
   }
@@ -244,9 +258,11 @@ allprojects {
       tmpDir.mkdirs()
 
       def files = []
-      testTask.testClassesDir.eachFileRecurse(FileType.FILES) { f ->
-        def relPath = new File(testTask.testClassesDir.toURI().relativize(f.toURI()).toString()).toString().replaceAll(/\$.*/, '.*').replaceAll(/\.class/, '.*')
-        files << relPath
+      test.testClassesDirs.files.each { File classDir ->
+        classDir.eachFileRecurse(FileType.FILES) { f ->
+          def relPath = new File(classDir.toURI().relativize(f.toURI()).toString()).toString().replaceAll(/\$.*/, '.*').replaceAll(/\.class/, '.*')
+          files << relPath
+        }
       }
 
       List myPartition = project.partitionFiles(files)
@@ -291,19 +307,11 @@ subprojects {
   targetCompatibility = 1.8
 
   apply plugin: 'maven'
+  apply plugin: org.owasp.dependencycheck.gradle.DependencyCheck
+  apply plugin: com.github.benmanes.gradle.versions.VersionsPlugin
 
   buildDir = "${projectDir}/target"
-
-  uploadArchives {
-    repositories {
-      mavenDeployer {
-        repository(url: "file://${rootProject.rootDir}/maven-output-dir")
-      }
-    }
-  }
 }
-
-task all(dependsOn: [':server-launcher:fatJar', ':server:prepareDb'])
 
 task allDependencies {
   dependsOn allprojects.collect { "$it.path:dependencies" }
@@ -312,5 +320,9 @@ task allDependencies {
 }
 
 ext.versions = [
-  jetty: '9.2.18.v20160721'
+  jetty: '9.2.18.v20160721',
+  junit: '4.12',
+  mockito: '1.9.5',
+  hamcrest: '1.3',
+  spring: '3.1.3.RELEASE'
 ]

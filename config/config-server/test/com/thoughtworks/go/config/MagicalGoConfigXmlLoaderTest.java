@@ -34,7 +34,6 @@ import com.thoughtworks.go.config.remote.ConfigOrigin;
 import com.thoughtworks.go.config.remote.ConfigRepoConfig;
 import com.thoughtworks.go.config.remote.FileConfigOrigin;
 import com.thoughtworks.go.config.remote.PartialConfig;
-import com.thoughtworks.go.config.server.security.ldap.BaseConfig;
 import com.thoughtworks.go.config.validation.*;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.config.Admin;
@@ -174,7 +173,7 @@ public class MagicalGoConfigXmlLoaderTest {
     public void shouldLoadConfigWithConfigRepoAndPluginName() throws Exception {
         CruiseConfig cruiseConfig = xmlLoader.loadConfigHolder(ConfigFileFixture.configWithConfigRepos(
                 "  <config-repos>\n"
-                        + "    <config-repo plugin=\"myplugin\">\n"
+                        + "    <config-repo plugin=\"myplugin\" id=\"repo-id\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />\n"
                         + "    </config-repo >\n"
                         + "  </config-repos>\n"
@@ -188,10 +187,10 @@ public class MagicalGoConfigXmlLoaderTest {
     public void shouldLoadConfigWith2ConfigRepos() throws Exception {
         CruiseConfig cruiseConfig = xmlLoader.loadConfigHolder(ConfigFileFixture.configWithConfigRepos(
                 "  <config-repos>\n"
-                        + "    <config-repo plugin=\"myplugin\">\n"
+                        + "    <config-repo plugin=\"myplugin\" id=\"repo-id1\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />\n"
                         + "    </config-repo >\n"
-                        + "    <config-repo plugin=\"myplugin\">\n"
+                        + "    <config-repo plugin=\"myplugin\" id=\"repo-id2\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-refmain-config-part.git\" />\n"
                         + "    </config-repo >\n"
                         + "  </config-repos>\n"
@@ -207,7 +206,7 @@ public class MagicalGoConfigXmlLoaderTest {
     public void shouldLoadConfigWithConfigRepoAndConfiguration() throws Exception {
         CruiseConfig cruiseConfig = xmlLoader.loadConfigHolder(ConfigFileFixture.configWithConfigRepos(
                 "  <config-repos>\n"
-                        + "    <config-repo >\n"
+                        + "    <config-repo id=\"id1\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />\n"
                         + "      <configuration>\n"
                         + "        <property>\n"
@@ -251,10 +250,10 @@ public class MagicalGoConfigXmlLoaderTest {
     public void shouldFailValidation_WhenSameMaterialUsedBy2ConfigRepos() throws Exception {
         CruiseConfig cruiseConfig = xmlLoader.loadConfigHolder(ConfigFileFixture.configWithConfigRepos(
                 "  <config-repos>\n"
-                        + "    <config-repo plugin=\"myplugin\">\n"
+                        + "    <config-repo plugin=\"myplugin\" id=\"id1\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />\n"
                         + "    </config-repo >\n"
-                        + "    <config-repo plugin=\"myotherplugin\">\n"
+                        + "    <config-repo plugin=\"myotherplugin\" id=\"id2\">\n"
                         + "      <git url=\"https://github.com/tomzo/gocd-indep-config-part.git\" />\n"
                         + "    </config-repo >\n"
                         + "  </config-repos>\n"
@@ -900,7 +899,7 @@ public class MagicalGoConfigXmlLoaderTest {
 
             fail("Should not allow empty command");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("Command is invalid. \"\" should conform to the pattern - \\S+(.*\\S+)*"));
+            assertThat(e.getMessage(), containsString("Command is invalid. \"\" should conform to the pattern - \\S(.*\\S)?"));
         }
     }
 
@@ -930,7 +929,7 @@ public class MagicalGoConfigXmlLoaderTest {
 
             fail("Should not allow command with trailing spaces");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("Command is invalid. \"bundle  \" should conform to the pattern - \\S+(.*\\S+)*"));
+            assertThat(e.getMessage(), containsString("Command is invalid. \"bundle  \" should conform to the pattern - \\S(.*\\S)?"));
         }
     }
 
@@ -960,7 +959,7 @@ public class MagicalGoConfigXmlLoaderTest {
 
             fail("Should not allow command with trailing spaces");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("Command is invalid. \"    bundle\" should conform to the pattern - \\S+(.*\\S+)*"));
+            assertThat(e.getMessage(), containsString("Command is invalid. \"    bundle\" should conform to the pattern - \\S(.*\\S)?"));
         }
     }
 
@@ -1525,7 +1524,6 @@ public class MagicalGoConfigXmlLoaderTest {
         String content = "<cruise schemaVersion='" + CONFIG_SCHEMA_VERSION + "'>\n"
                 + "<server artifactsdir='artifacts' >"
                 + "<security>\n"
-                + "      <passwordFile path=\"/etc/cruise/password.properties\" />\n"
                 + "      <roles>\n"
                 + "        <role name=\"bar\">\n"
                 + "          <users>"
@@ -1908,7 +1906,7 @@ public class MagicalGoConfigXmlLoaderTest {
             ConfigMigrator.loadWithMigration(content);
             fail("Should not support 2 environments with the same same");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("Duplicate unique value [uat] declared for identity constraint \"uniqueEnvironmentName\" of element \"environments\""));
+            assertThat(e.getMessage(), containsString("Duplicate unique value [uat] declared for identity constraint of element \"environments\""));
         }
     }
 
@@ -1999,7 +1997,7 @@ public class MagicalGoConfigXmlLoaderTest {
             fail("XSD should not allow duplicate agent uuid in environment");
         } catch (Exception e) {
             assertThat(e.getMessage(), containsString(
-                    "Duplicate unique value [1] declared for identity constraint \"uniqueEnvironmentAgentsUuid\" of element \"agents\"."));
+                    "Duplicate unique value [1] declared for identity constraint of element \"agents\"."));
         }
     }
 
@@ -2958,7 +2956,7 @@ public class MagicalGoConfigXmlLoaderTest {
     @Test
     public void shouldLoadAfterMigration62() {
         final String content = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
-                + "<cruise schemaVersion='" + CONFIG_SCHEMA_VERSION + "'>\n"
+                + "<cruise schemaVersion='62'>\n"
                 + "    <server artifactsdir=\"artifacts\">\n"
                 + "      <security>"
                 + "        <ldap uri='some_url' managerDn='some_manager_dn' managerPassword='foo' searchFilter='(sAMAccountName={0})'>"
@@ -2970,8 +2968,8 @@ public class MagicalGoConfigXmlLoaderTest {
                 + "    </server>"
                 + " </cruise>";
         GoConfigHolder goConfigHolder = ConfigMigrator.loadWithMigration(content);
-        BaseConfig firstBase = goConfigHolder.config.server().security().ldapConfig().getBasesConfig().first();
-        assertThat(firstBase.getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com"));
+        assertThat(goConfigHolder.config.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(goConfigHolder.config.server().security().securityAuthConfigs().get(0).getProperty("SearchBases").getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com"));
     }
 
     @Test
@@ -3232,7 +3230,7 @@ public class MagicalGoConfigXmlLoaderTest {
             xmlLoader.loadConfigHolder(xml);
             fail("should have thrown XsdValidationException");
         } catch (XsdValidationException e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [repo-id] declared for identity constraint \"uniqueRepositoryId\" of element \"repositories\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [repo-id] declared for identity constraint of element \"repositories\"."));
         }
     }
 
@@ -3243,7 +3241,7 @@ public class MagicalGoConfigXmlLoaderTest {
             xmlLoader.loadConfigHolder(xml);
             fail("should have thrown XsdValidationException");
         } catch (XsdValidationException e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [repo] declared for identity constraint \"uniqueRepositoryName\" of element \"repositories\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [repo] declared for identity constraint of element \"repositories\"."));
         }
     }
 
@@ -3255,7 +3253,7 @@ public class MagicalGoConfigXmlLoaderTest {
             xmlLoader.loadConfigHolder(xml);
             fail("should have thrown XsdValidationException");
         } catch (XsdValidationException e) {
-            assertThat(e.getMessage(), is("Duplicate unique value [package-id] declared for identity constraint \"uniquePackageId\" of element \"cruise\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [package-id] declared for identity constraint of element \"cruise\"."));
         }
     }
 
@@ -3941,29 +3939,6 @@ public class MagicalGoConfigXmlLoaderTest {
     }
 
     @Test
-    public void shouldMigrateLdapManagerPasswordWithNewlineAndSpaces_XslMigrationFrom88To90() throws Exception {
-        String plainText = "something";
-        String encryptedValue = new GoCipher().encrypt(plainText);
-        String encryptedValueWithWhitespaceAndNewline = new StringBuilder(encryptedValue).insert(2, "\r\n" +
-                "                        ").toString();
-
-        String content = ConfigFileFixture.config(
-                "<server artifactsdir='artifacts'>\n" +
-                        "<security>\n" +
-                        "      <ldap uri='url' managerDn='manager-dn' encryptedManagerPassword='"+encryptedValueWithWhitespaceAndNewline+"'>\n" +
-                        "        <bases>\n" +
-                        "          <base value='base' />\n" +
-                        "        </bases>\n" +
-                        "      </ldap>\n" +
-                        "    </security>" +
-                        "  </server>", 88);
-
-        CruiseConfig config = ConfigMigrator.loadWithMigration(content).config;
-        assertThat(config.server().security().ldapConfig().currentManagerPassword(), is(plainText));
-        assertThat(config.server().security().ldapConfig().getEncryptedManagerPassword(), is(encryptedValue));
-    }
-
-    @Test
     public void shouldFailValidationForPipelineWithDuplicateStageNames() throws Exception {
         try {
             xmlLoader.loadConfigHolder(ConfigFileFixture.PIPELINES_WITH_DUPLICATE_STAGE_NAME);
@@ -3980,7 +3955,7 @@ public class MagicalGoConfigXmlLoaderTest {
             xmlLoader.loadConfigHolder(ConfigFileFixture.JOBS_WITH_SAME_NAME);
         } catch (Exception e) {
             assertTrue(e instanceof XsdValidationException);
-            assertThat(e.getMessage(), is("Duplicate unique value [unit] declared for identity constraint \"uniqueJob\" of element \"jobs\"."));
+            assertThat(e.getMessage(), is("Duplicate unique value [unit] declared for identity constraint of element \"jobs\"."));
         }
     }
 

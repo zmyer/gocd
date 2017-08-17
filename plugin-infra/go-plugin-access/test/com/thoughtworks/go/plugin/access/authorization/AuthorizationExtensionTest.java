@@ -43,7 +43,6 @@ import org.skyscreamer.jsonassert.JSONAssert;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 
 import static com.thoughtworks.go.plugin.access.authorization.AuthorizationPluginConstants.*;
@@ -136,7 +135,7 @@ public class AuthorizationExtensionTest {
 
     @Test
     public void shouldTalkToPlugin_To_VerifyConnection() throws Exception {
-        String responseBody = "[]";
+        String responseBody = "{\"status\":\"success\"}";
         when(pluginManager.submitTo(eq(PLUGIN_ID), requestArgumentCaptor.capture())).thenReturn(new DefaultGoPluginApiResponse(SUCCESS_RESPONSE_CODE, responseBody));
         AuthorizationExtension authorizationExtensionSpy = spy(authorizationExtension);
 
@@ -144,7 +143,7 @@ public class AuthorizationExtensionTest {
 
         assertRequest(requestArgumentCaptor.getValue(), AuthorizationPluginConstants.EXTENSION_NAME, "1.0", REQUEST_VERIFY_CONNECTION, "{}");
 
-        verify(authorizationExtensionSpy).validateAuthConfig(PLUGIN_ID, Collections.emptyMap());
+        verify(authorizationExtensionSpy).verifyConnection(PLUGIN_ID, Collections.emptyMap());
     }
 
     @Test
@@ -232,7 +231,6 @@ public class AuthorizationExtensionTest {
         assertThat(authenticationResponse.getRoles().get(0), is("blackbird"));
     }
 
-
     @Test
     public void shouldTalkToPlugin_To_AuthenticateUserWithEmptyListIfRoleConfigsAreNotProvided() throws Exception {
         String requestBody = "{\n" +
@@ -296,6 +294,30 @@ public class AuthorizationExtensionTest {
         assertRequest(requestArgumentCaptor.getValue(), AuthorizationPluginConstants.EXTENSION_NAME, "1.0", REQUEST_SEARCH_USERS, requestBody);
         assertThat(users, hasSize(1));
         assertThat(users, hasItem(new User("bob", "Bob", "bob@example.com")));
+    }
+
+    @Test
+    public void shouldTalkToPlugin_To_GetAuthorizationServerUrl() throws JSONException {
+        String requestBody = "{\n" +
+                "  \"auth_configs\": [\n" +
+                "    {\n" +
+                "      \"id\": \"github\",\n" +
+                "      \"configuration\": {\n" +
+                "        \"url\": \"some-url\"\n" +
+                "      }\n" +
+                "    }\n" +
+                "  ],\n" +
+                "  \"authorization_server_callback_url\": \"http://go.site.url/go/plugin/plugin-id/authenticate\"\n"+
+                "}";
+        String responseBody = "{\"authorization_server_url\":\"url_to_authorization_server\"}";
+        SecurityAuthConfig authConfig = new SecurityAuthConfig("github", "cd.go.github", ConfigurationPropertyMother.create("url", false, "some-url"));
+
+        when(pluginManager.submitTo(eq(PLUGIN_ID), requestArgumentCaptor.capture())).thenReturn(new DefaultGoPluginApiResponse(SUCCESS_RESPONSE_CODE, responseBody));
+
+        String authorizationServerRedirectUrl = authorizationExtension.getAuthorizationServerUrl(PLUGIN_ID, Collections.singletonList(authConfig), "http://go.site.url");
+
+        assertRequest(requestArgumentCaptor.getValue(), AuthorizationPluginConstants.EXTENSION_NAME, "1.0", REQUEST_AUTHORIZATION_SERVER_URL, requestBody);
+        assertThat(authorizationServerRedirectUrl, is("url_to_authorization_server"));
     }
 
     private void assertRequest(GoPluginApiRequest goPluginApiRequest, String extensionName, String version, String requestName, String requestBody) throws JSONException {

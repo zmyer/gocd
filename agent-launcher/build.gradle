@@ -1,7 +1,7 @@
 import com.thoughtworks.go.build.VerifyJarTask
 
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ description = 'Agent Launcher Jar'
 
 dependencies {
   compile project(':agent-common')
+  testCompile group: 'org.mockito', name: 'mockito-core', version: project.versions.mockito
   testCompile project(':test-utils')
 }
 
@@ -27,20 +28,16 @@ jar {
   classifier 'classes'
 }
 
-task fatJar(type: Jar, dependsOn: [':agent-launcher:jar', ':agent-common:jar']) {
+task fatJar(type: Jar) {
+  finalizedBy 'verifyJar'
+  dependsOn jar
   manifest {
     attributes 'Go-Agent-Launcher-Class': 'com.thoughtworks.go.agent.launcher.AgentLauncherImpl'
     attributes 'Go-Agent-Launcher-Lib-Dir': 'libs'
   }
 
-  doFirst {
-    from(configurations.compile) { into "libs/" }
-    from(jar.archivePath) { into('libs/') }
-  }
-
-  doLast {
-    verifyJar.execute()
-  }
+  from(configurations.compile) { into "libs/" }
+  from(jar.archivePath) { into('libs/') }
 }
 
 task verifyJar(type: VerifyJarTask) {
@@ -50,7 +47,6 @@ task verifyJar(type: VerifyJarTask) {
           "agent-common-${project.version}.jar",
           "agent-launcher-${project.version}-classes.jar",
           "base-${project.version}.jar",
-          "commons-codec-1.10.jar",
           "commons-io-2.5.jar",
           "commons-lang-2.6.jar",
           "commons-logging-1.2.jar",
@@ -59,6 +55,8 @@ task verifyJar(type: VerifyJarTask) {
           "jcommander-1.60.jar",
           "joda-time-2.3.jar",
           "log4j-1.2.17.jar",
+          "slf4j-api-1.7.21.jar",
+          "slf4j-log4j12-1.7.21.jar",
       ]
   ]
 }

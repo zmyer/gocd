@@ -23,8 +23,6 @@ import com.thoughtworks.go.plugin.api.request.GoPluginApiRequest;
 import com.thoughtworks.go.plugin.api.response.GoPluginApiResponse;
 import com.thoughtworks.go.plugin.infra.commons.PluginUploadResponse;
 import com.thoughtworks.go.plugin.infra.listeners.DefaultPluginJarChangeListener;
-import com.thoughtworks.go.plugin.infra.listeners.PluginsListListener;
-import com.thoughtworks.go.plugin.infra.listeners.PluginsZipUpdater;
 import com.thoughtworks.go.plugin.infra.monitor.DefaultPluginJarLocationMonitor;
 import com.thoughtworks.go.plugin.infra.plugininfo.DefaultPluginRegistry;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
@@ -32,7 +30,8 @@ import com.thoughtworks.go.util.FileUtil;
 import com.thoughtworks.go.util.SystemEnvironment;
 import org.apache.commons.io.FileUtils;
 import org.apache.http.HttpStatus;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -41,12 +40,11 @@ import java.io.IOException;
 import java.util.*;
 
 import static com.thoughtworks.go.util.SystemEnvironment.PLUGIN_BUNDLE_PATH;
-import static com.thoughtworks.go.util.SystemEnvironment.PLUGIN_FRAMEWORK_ENABLED;
 import static java.lang.Double.parseDouble;
 
 @Service
 public class DefaultPluginManager implements PluginManager {
-    private static final Logger LOGGER = Logger.getLogger(DefaultPluginManager.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPluginManager.class);
     private final DefaultPluginJarLocationMonitor monitor;
     private DefaultPluginRegistry registry;
     private final DefaultPluginJarChangeListener defaultPluginJarChangeListener;
@@ -55,22 +53,18 @@ public class DefaultPluginManager implements PluginManager {
     private GoPluginOSGiFramework goPluginOSGiFramework;
     private PluginWriter pluginWriter;
     private PluginValidator pluginValidator;
-    private PluginsZipUpdater pluginsZipUpdater;
-    private PluginsListListener pluginsListListener;
     private final Set<PluginDescriptor> initializedPlugins = new HashSet<>();
     private PluginRequestProcessorRegistry requestProcesRegistry;
 
     @Autowired
     public DefaultPluginManager(DefaultPluginJarLocationMonitor monitor, DefaultPluginRegistry registry, GoPluginOSGiFramework goPluginOSGiFramework,
                                 DefaultPluginJarChangeListener defaultPluginJarChangeListener, PluginRequestProcessorRegistry requestProcesRegistry, PluginWriter pluginWriter,
-                                PluginValidator pluginValidator, SystemEnvironment systemEnvironment, PluginsZipUpdater pluginsZipUpdater, PluginsListListener pluginsListListener) {
+                                PluginValidator pluginValidator, SystemEnvironment systemEnvironment) {
         this.monitor = monitor;
         this.registry = registry;
         this.defaultPluginJarChangeListener = defaultPluginJarChangeListener;
         this.requestProcesRegistry = requestProcesRegistry;
         this.systemEnvironment = systemEnvironment;
-        this.pluginsZipUpdater = pluginsZipUpdater;
-        this.pluginsListListener = pluginsListListener;
         bundleLocation = bundlePath();
         this.goPluginOSGiFramework = goPluginOSGiFramework;
         this.pluginWriter = pluginWriter;
@@ -125,10 +119,6 @@ public class DefaultPluginManager implements PluginManager {
 
     @Override
     public void startInfrastructure(boolean shouldPoll) {
-        if (!systemEnvironment.get(PLUGIN_FRAMEWORK_ENABLED)) {
-            return;
-        }
-
         removeBundleDirectory();
         goPluginOSGiFramework.start();
 
@@ -155,17 +145,7 @@ public class DefaultPluginManager implements PluginManager {
     }
 
     @Override
-    public void registerPluginsFolderChangeListener() {
-        monitor.addPluginsFolderChangeListener(pluginsZipUpdater);
-        monitor.addPluginsFolderChangeListener(pluginsListListener);
-    }
-
-    @Override
     public void stopInfrastructure() {
-        if (!systemEnvironment.get(PLUGIN_FRAMEWORK_ENABLED)) {
-            return;
-        }
-
         goPluginOSGiFramework.stop();
 
         monitor.stop();

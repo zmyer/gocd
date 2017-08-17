@@ -93,8 +93,6 @@ public class UserServiceIntegrationTest {
     private HibernateTemplate template;
 
     private static GoConfigFileHelper configFileHelper = new GoConfigFileHelper(ConfigFileFixture.XML_WITH_ENTERPRISE_LICENSE_FOR_TWO_USERS);
-    private Username ROOT = new Username(new CaseInsensitiveString("root"));
-
 
     @Before
     public void setUp() throws Exception {
@@ -220,7 +218,7 @@ public class UserServiceIntegrationTest {
             userService.addNotificationFilter(user.getId(), filter);
             fail("shouldNotAddDuplicateNotificationFilter");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("already exist"));
+            assertThat(e.getMessage(), containsString("Duplicate notification filter"));
         }
     }
 
@@ -235,7 +233,7 @@ public class UserServiceIntegrationTest {
             userService.addNotificationFilter(user.getId(), new NotificationFilter("cruise", "dev", StageEvent.Fixed, false));
             fail("shouldNotAddUnnecessaryNotificationFilter");
         } catch (Exception e) {
-            assertThat(e.getMessage(), containsString("already exist"));
+            assertThat(e.getMessage(), containsString("Duplicate notification filter"));
         }
     }
 
@@ -397,7 +395,7 @@ public class UserServiceIntegrationTest {
     public void shouldReturnErrorMessageWhenTheLastAdminIsBeingDisabled() throws Exception {
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
 
-        configFileHelper.turnOnSecurity();
+        configFileHelper.enableSecurity();
         configFileHelper.addAdmins("Jake", "Pavan", "Yogi");
 
         userService.create(users("Jake", "Pavan", "Shilpa", "Yogi"), new HttpLocalizedOperationResult());
@@ -591,8 +589,9 @@ public class UserServiceIntegrationTest {
 
     @Test
     public void getRoleSelectionOnlyForNonPluginRoles() throws Exception {
+        configFileHelper.addSecurityAuthConfig(new SecurityAuthConfig("auth_id", "plugin_id"));
         configFileHelper.addRole(new RoleConfig(new CaseInsensitiveString("core-role")));
-        configFileHelper.addRole(new PluginRoleConfig("plugin-role", "foo"));
+        configFileHelper.addRole(new PluginRoleConfig("plugin-role", "auth_id"));
         addUser(new User("yogi"));
         addUser(new User("shilpa"));
         userService.modifyRolesAndUserAdminPrivileges(Arrays.asList("yogi", "shilpa"), new TriStateSelection(Admin.GO_SYSTEM_ADMIN, TriStateSelection.Action.nochange), Arrays.asList(new TriStateSelection("core-role", TriStateSelection.Action.add)), new HttpLocalizedOperationResult());
@@ -774,7 +773,7 @@ public class UserServiceIntegrationTest {
     }
 
     private void givingJezViewPermissionToMingle() throws Exception {
-        configFileHelper.turnOnSecurity();
+        configFileHelper.enableSecurity();
         configFileHelper.addPipeline("mingle", "dev");
         configFileHelper.setViewPermissionForGroup("defaultGroup", "jez");
         configFileHelper.addSecurityWithAdminConfig();

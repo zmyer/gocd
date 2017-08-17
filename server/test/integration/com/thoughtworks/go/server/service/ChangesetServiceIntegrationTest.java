@@ -16,6 +16,7 @@
 
 package com.thoughtworks.go.server.service;
 
+import java.io.IOException;
 import java.util.*;
 
 import com.thoughtworks.go.config.*;
@@ -36,7 +37,6 @@ import com.thoughtworks.go.domain.materials.svn.SvnMaterialInstance;
 import com.thoughtworks.go.helper.MaterialsMother;
 import com.thoughtworks.go.helper.PipelineConfigMother;
 import com.thoughtworks.go.i18n.Localizer;
-import com.thoughtworks.go.security.GoCipher;
 import com.thoughtworks.go.server.dao.DatabaseAccessHelper;
 import com.thoughtworks.go.server.domain.Username;
 import com.thoughtworks.go.server.materials.DependencyMaterialUpdateNotifier;
@@ -71,8 +71,6 @@ import static org.junit.Assert.assertThat;
 public class ChangesetServiceIntegrationTest {
     @Autowired
     MaterialRepository materialRepository;
-    @Autowired
-    PipelineService pipelineService;
     @Autowired
     ChangesetService changesetService;
     @Autowired
@@ -268,10 +266,9 @@ public class ChangesetServiceIntegrationTest {
     }
 
     @Test
-    public void shouldFailWhenUserDoesNotHaveAccess() {
-        SecurityConfig securityConfig = new SecurityConfig(new LdapConfig(new GoCipher()), new PasswordFileConfig("/tmp/foo.passwd"), true);
-        securityConfig.adminsConfig().add(new AdminUser(new CaseInsensitiveString("admin")));
-        configHelper.addSecurity(securityConfig);
+    public void shouldFailWhenUserDoesNotHaveAccess() throws IOException {
+        configHelper.enableSecurity();
+        configHelper.addAdmins("admin");
         CruiseConfig config = this.configHelper.getCachedGoConfig().loadForEditing();
         config.pipelines(BasicPipelineConfigs.DEFAULT_GROUP).setAuthorization(new Authorization(new ViewConfig(new AdminUser(new CaseInsensitiveString("admin")))));
         configHelper.writeConfigFile(config);
@@ -591,7 +588,7 @@ public class ChangesetServiceIntegrationTest {
 
     @Test
     public void shouldFilterOutMaterialRevisionsThatTheUserIsNotAuthorizedToView() throws Exception {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("Yogi");
 
         Username otherUser = new Username(new CaseInsensitiveString("otherUser"));

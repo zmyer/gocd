@@ -125,7 +125,7 @@ module ApplicationHelper
     options = HashWithIndifferentAccess.new(options)
     options.reverse_merge!(type: 'submit')
     options.merge!(disabled: 'disabled') unless system_environment.isServerActive()
-    options[:value] = name
+    options[:value] ||= name
     lambda_text, options_without_onclick = onclick_lambda(options)
     if (options[:type] == "image")
       button_body = image_button(name, options_without_onclick)
@@ -235,10 +235,6 @@ module ApplicationHelper
 
   def is_user_authorized_to_view_templates?
     security_service.isAuthorizedToViewTemplates(current_user)
-  end
-
-  def is_plugins_enabled?
-    system_environment.get(com.thoughtworks.go.util.SystemEnvironment.PLUGIN_FRAMEWORK_ENABLED)
   end
 
   def render_json(options={})
@@ -461,8 +457,19 @@ module ApplicationHelper
     form_remote_tag(options)
   end
 
+  def is_quick_edit_page_default?
+    Toggles.isToggleOn(Toggles.QUICK_EDIT_PAGE_DEFAULT)
+  end
+
   def is_pipeline_config_spa_enabled?
     Toggles.isToggleOn(Toggles.PIPELINE_CONFIG_SINGLE_PAGE_APP)
+  end
+
+  def plugin_supports_status_report?(plugin_id)
+    plugin_info = ElasticAgentMetadataStore.instance().getPluginInfo(plugin_id)
+
+    return false if plugin_info.nil?
+    plugin_info.supportsStatusReport()
   end
 
   private

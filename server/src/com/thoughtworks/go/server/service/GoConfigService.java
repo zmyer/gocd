@@ -51,11 +51,13 @@ import com.thoughtworks.go.serverhealth.HealthStateScope;
 import com.thoughtworks.go.serverhealth.HealthStateType;
 import com.thoughtworks.go.service.ConfigRepository;
 import com.thoughtworks.go.util.*;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.dom4j.Document;
 import org.dom4j.DocumentFactory;
 import org.dom4j.Element;
 import org.dom4j.io.SAXReader;
 import org.jdom2.input.JDOMParseException;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -80,7 +82,7 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
     private Cloner cloner = new Cloner();
     private Clock clock = new SystemTimeClock();
 
-    private static final Logger LOGGER = Logger.getLogger(GoConfigService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(GoConfigService.class);
 
     public static final String INVALID_CRUISE_CONFIG_XML = "Invalid Configuration";
     private final ConfigElementImplementationRegistry registry;
@@ -145,6 +147,15 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
         return canEditPipeline(pipelineName, username, result, findGroupNameByPipeline(new CaseInsensitiveString(pipelineName)));
     }
 
+    public boolean canEditPipeline(String pipelineName, Username username) {
+        if (pipelineExists(pipelineName) &&
+                isUserAdminOfGroup(username.getUsername(), findGroupNameByPipeline(new CaseInsensitiveString(pipelineName)))) {
+            return true;
+        }
+
+        return false;
+    }
+
     public boolean canEditPipeline(String pipelineName, Username username, LocalizedOperationResult result, String groupName) {
         if (!doesPipelineExist(pipelineName, result)) {
             return false;
@@ -159,6 +170,15 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
     private boolean doesPipelineExist(String pipelineName, LocalizedOperationResult result) {
         if (!getCurrentConfig().hasPipelineNamed(new CaseInsensitiveString(pipelineName))) {
             result.notFound(LocalizedMessage.string("RESOURCE_NOT_FOUND", "pipeline", pipelineName), HealthStateType.general(HealthStateScope.forPipeline(pipelineName)));
+            return false;
+        }
+        return true;
+    }
+
+    private boolean pipelineExists(String pipelineName) {
+        try {
+            getCurrentConfig().pipelineConfigByName(new CaseInsensitiveString(pipelineName));
+        } catch (PipelineNotFoundException e) {
             return false;
         }
         return true;
@@ -575,7 +595,7 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
                 return materialConfig;
             }
         }
-        LOGGER.error("material [" + materialName + "] not found in pipeline [" + pipelineName + "]");
+        LOGGER.error("material [{}] not found in pipeline [{}]", materialName, pipelineName);
         return null;
     }
 
@@ -586,7 +606,7 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
                 return materialConfig;
             }
         }
-        LOGGER.error("material with fingerprint [" + pipelineUniqueFingerprint + "] not found in pipeline [" + pipeline + "]");
+        LOGGER.error("material with fingerprint [{}] not found in pipeline [{}]", pipelineUniqueFingerprint, pipeline);
         return null;
     }
 
@@ -905,7 +925,7 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
         try {
             goConfigRevision = configRepository.getRevision(version);
         } catch (Exception e) {
-            LOGGER.info("[Go Config Service] Could not fetch cruise config xml at version=" + version, e);
+            LOGGER.info("[Go Config Service] Could not fetch cruise config xml at version={}", version, e);
         }
         return goConfigRevision;
     }
@@ -1034,7 +1054,7 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
 
         protected ConfigSaveState updatePartial(String xmlPartial, final String md5) throws Exception {
             LOGGER.debug("[Config Save] Updating partial");
-            org.dom4j.Document document = documentRoot();
+            Document document = documentRoot();
             Element root = document.getRootElement();
 
             Element configElement = ((Element) root.selectSingleNode(getXpath()));
@@ -1082,11 +1102,11 @@ public class GoConfigService implements Initializer, CruiseConfigProvider {
             return goConfigDao.updateFullConfig(new FullConfigUpdateCommand(cruiseConfig, md5));
         }
 
-        protected org.dom4j.Document documentRoot() throws Exception {
+        protected Document documentRoot() throws Exception {
             CruiseConfig cruiseConfig = goConfigDao.loadForEditing();
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             new MagicalGoConfigXmlWriter(configCache, registry).write(cruiseConfig, out, true);
-            org.dom4j.Document document = reader.read(new StringReader(out.toString()));
+            Document document = reader.read(new StringReader(out.toString()));
             Map<String, String> map = new HashMap<>();
             map.put("go", MagicalGoConfigXmlWriter.XML_NS);
             //TODO: verify this doesn't cache the factory

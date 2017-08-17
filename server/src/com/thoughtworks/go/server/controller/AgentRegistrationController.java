@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package com.thoughtworks.go.server.controller;
 
 import com.thoughtworks.go.config.AgentConfig;
+import com.thoughtworks.go.config.ErrorCollector;
 import com.thoughtworks.go.config.GoConfigDao;
 import com.thoughtworks.go.config.exceptions.GoConfigInvalidException;
 import com.thoughtworks.go.config.update.UpdateEnvironmentsCommand;
@@ -41,6 +42,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.View;
 
+import javax.annotation.PostConstruct;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.FileInputStream;
@@ -77,10 +79,6 @@ public class AgentRegistrationController {
 
     @RequestMapping(value = "/admin/latest-agent.status", method = {RequestMethod.HEAD, RequestMethod.GET})
     public void checkAgentStatus(HttpServletResponse response) throws IOException {
-        populateAgentChecksum();
-        populateLauncherChecksum();
-        populateTFSSDKChecksum();
-
         response.setHeader(SystemEnvironment.AGENT_CONTENT_MD5_HEADER, agentChecksum);
         response.setHeader(SystemEnvironment.AGENT_LAUNCHER_CONTENT_MD5_HEADER, agentLauncherChecksum);
         response.setHeader(SystemEnvironment.AGENT_PLUGINS_ZIP_MD5_HEADER, pluginsZip.md5());
@@ -90,24 +88,18 @@ public class AgentRegistrationController {
 
     @RequestMapping(value = "/admin/agent", method = RequestMethod.HEAD)
     public void checkAgentVersion(HttpServletResponse response) throws IOException {
-        populateAgentChecksum();
-
         response.setHeader("Content-MD5", agentChecksum);
         setOtherHeaders(response);
     }
 
     @RequestMapping(value = "/admin/agent-launcher.jar", method = RequestMethod.HEAD)
     public void checkAgentLauncherVersion(HttpServletResponse response) throws IOException {
-        populateLauncherChecksum();
-
         response.setHeader("Content-MD5", agentLauncherChecksum);
         setOtherHeaders(response);
     }
 
     @RequestMapping(value = "/admin/tfs-impl.jar", method = RequestMethod.HEAD)
     public void checkTfsImplVersion(HttpServletResponse response) throws IOException {
-        populateTFSSDKChecksum();
-
         response.setHeader("Content-MD5", tfsSdkChecksum);
         setOtherHeaders(response);
     }
@@ -124,27 +116,24 @@ public class AgentRegistrationController {
         setOtherHeaders(response);
     }
 
-    private void populateLauncherChecksum() throws IOException {
-        synchronized (this) {
-            if (agentLauncherChecksum == null) {
-                agentLauncherChecksum = getChecksumFor(new AgentLauncherSrc());
-            }
+    @PostConstruct
+    public void populateLauncherChecksum() throws IOException {
+        if (agentLauncherChecksum == null) {
+            agentLauncherChecksum = getChecksumFor(new AgentLauncherSrc());
         }
     }
 
-    private void populateAgentChecksum() throws IOException {
-        synchronized (this) {
-            if (agentChecksum == null) {
-                agentChecksum = getChecksumFor(new AgentJarSrc());
-            }
+    @PostConstruct
+    public void populateAgentChecksum() throws IOException {
+        if (agentChecksum == null) {
+            agentChecksum = getChecksumFor(new AgentJarSrc());
         }
     }
 
-    private void populateTFSSDKChecksum() throws IOException {
-        synchronized (this) {
-            if (tfsSdkChecksum == null) {
-                tfsSdkChecksum = getChecksumFor(new TFSImplSrc());
-            }
+    @PostConstruct
+    public void populateTFSSDKChecksum() throws IOException {
+        if (tfsSdkChecksum == null) {
+            tfsSdkChecksum = getChecksumFor(new TFSImplSrc());
         }
     }
 
@@ -202,9 +191,7 @@ public class AgentRegistrationController {
                                      @RequestParam(value = "supportsBuildCommandProtocol", required = false, defaultValue = "false") boolean supportsBuildCommandProtocol,
                                      HttpServletRequest request) throws IOException {
         final String ipAddress = request.getRemoteAddr();
-        if (LOG.isDebugEnabled()) {
-            LOG.debug("Processing registration request from agent [{}/{}]", hostname, ipAddress);
-        }
+        LOG.debug("Processing registration request from agent [{}/{}]", hostname, ipAddress);
         Registration keyEntry;
         String preferredHostname = hostname;
 
@@ -230,7 +217,7 @@ public class AgentRegistrationController {
             }
 
             if (goConfigService.serverConfig().shouldAutoRegisterAgentWith(agentAutoRegisterKey)) {
-                LOG.info(String.format("[Agent Auto Registration] Auto registering agent with uuid %s ", uuid));
+                LOG.info("[Agent Auto Registration] Auto registering agent with uuid {} ", uuid);
                 GoConfigDao.CompositeConfigCommand compositeConfigCommand = new GoConfigDao.CompositeConfigCommand(
                         new AgentConfigService.AddAgentCommand(agentConfig),
                         new UpdateResourceCommand(uuid, agentAutoRegisterResources),
@@ -239,7 +226,7 @@ public class AgentRegistrationController {
                 HttpOperationResult result = new HttpOperationResult();
                 agentConfig = agentConfigService.updateAgent(compositeConfigCommand, uuid, result, agentService.agentUsername(uuid, ipAddress, preferredHostname));
                 if (!result.isSuccess()) {
-                    List<ConfigErrors> errors = com.thoughtworks.go.config.ErrorCollector.getAllErrors(agentConfig);
+                    List<ConfigErrors> errors = ErrorCollector.getAllErrors(agentConfig);
 
                     ConfigErrors e = new ConfigErrors();
                     e.add("resultMessage", result.detailedMessage());

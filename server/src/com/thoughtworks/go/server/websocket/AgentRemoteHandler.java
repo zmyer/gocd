@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 
 package com.thoughtworks.go.server.websocket;
 
-import com.thoughtworks.go.domain.AgentInstance;
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.domain.JobInstance;
 import com.thoughtworks.go.remote.AgentInstruction;
@@ -129,11 +128,6 @@ public class AgentRemoteHandler {
             return;
         }
         agentSessions.remove(uuid);
-        AgentInstance instance = agentService.findAgent(uuid);
-        if (instance != null) {
-            instance.lostContact();
-            LOGGER.info("{} lost contact because websocket connection is closed", instance.getAgentIdentifier());
-        }
     }
 
     public Map<String, Agent> connectedAgents() {

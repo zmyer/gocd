@@ -19,20 +19,14 @@ description = 'API to configure/access cruise-config.xml'
 dependencies {
   compile project(':config-api')
   compile project(':common')
-  compile(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.5.0.201609210915-r') {
+  compile(group: 'org.eclipse.jgit', name: 'org.eclipse.jgit', version: '4.7.0.201704051617-r') {
     exclude(group: 'org.apache.httpcomponents')
   }
   compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.21'
   compile group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.21'
-  compile group: 'xerces', name: 'xercesImpl', version: '2.9.1'
   compile group: 'cglib', name: 'cglib', version: '2.1_3'
   testCompile project(path: ':config-api', configuration: 'testOutput')
   testCompile project(':test-utils')
-  testCompile(group: 'jaxen', name: 'jaxen', version: '1.1') {
-    exclude(module: 'xom')
-    exclude(module: 'xercesImpl')
-    exclude(module: 'jdom')
-  }
   compileOnly(group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.47')
 }
 
@@ -40,6 +34,6 @@ test {
   systemProperty('go.enforce.serverId.immutability', 'N')
 }
 
-clean.doFirst {
+clean {
   delete 'config'
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,21 @@
 
 package com.thoughtworks.go.server.controller;
 
-import com.thoughtworks.go.config.AgentConfig;
-import com.thoughtworks.go.config.CaseInsensitiveString;
-import com.thoughtworks.go.config.Tabs;
-import com.thoughtworks.go.config.TrackingTool;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.domain.Properties;
 import com.thoughtworks.go.i18n.Localizer;
+import com.thoughtworks.go.plugin.access.elastic.ElasticAgentMetadataStore;
+import com.thoughtworks.go.server.dao.JobAgentMetadataDao;
+import com.thoughtworks.go.server.dao.JobInstanceDao;
 import com.thoughtworks.go.server.presentation.models.JobDetailPresentationModel;
 import com.thoughtworks.go.server.presentation.models.JobStatusJsonPresentationModel;
 import com.thoughtworks.go.server.service.*;
+import com.thoughtworks.go.server.service.support.toggle.Toggles;
 import com.thoughtworks.go.server.util.ErrorHandler;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -51,11 +53,13 @@ import static com.thoughtworks.go.util.json.JsonHelper.addDeveloperErrorMessage;
 @Controller
 public class JobController {
 
-    private static final Log LOGGER = LogFactory.getLog(JobController.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(JobController.class);
     @Autowired
     private JobInstanceService jobInstanceService;
     @Autowired
-    private JobDetailService jobDetailService;
+    private AgentService agentService;
+    @Autowired
+    private JobInstanceDao jobInstanceDao;
     @Autowired
     private GoConfigService goConfigService;
     @Autowired
@@ -70,16 +74,22 @@ public class JobController {
     private StageService stageService;
     @Autowired
     private Localizer localizer;
+    @Autowired
+    private JobAgentMetadataDao jobAgentMetadataDao;
+    private ElasticAgentMetadataStore elasticAgentMetadataStore = ElasticAgentMetadataStore.instance();
+
 
     public JobController() {
     }
 
     JobController(
-            JobInstanceService jobInstanceService, JobDetailService jobDetailService,
+            JobInstanceService jobInstanceService, AgentService agentService, JobInstanceDao jobInstanceDao,
             GoConfigService goConfigService, PipelineService pipelineService, RestfulService restfulService,
-            ArtifactsService artifactService, PropertiesService propertiesService, StageService stageService, Localizer localizer) {
+            ArtifactsService artifactService, PropertiesService propertiesService, StageService stageService,
+            Localizer localizer, JobAgentMetadataDao jobAgentMetadataDao) {
         this.jobInstanceService = jobInstanceService;
-        this.jobDetailService = jobDetailService;
+        this.agentService = agentService;
+        this.jobInstanceDao = jobInstanceDao;
         this.goConfigService = goConfigService;
         this.pipelineService = pipelineService;
         this.restfulService = restfulService;
@@ -87,6 +97,7 @@ public class JobController {
         this.propertiesService = propertiesService;
         this.stageService = stageService;
         this.localizer = localizer;
+        this.jobAgentMetadataDao = jobAgentMetadataDao;
     }
 
     @RequestMapping(value = "/tab/build/recent", method = RequestMethod.GET)
@@ -104,18 +115,38 @@ public class JobController {
 
         StageIdentifier stageIdentifier = restfulService.translateStageCounter(pipeline.getIdentifier(), stageName, stageCounter);
 
-        JobInstance instance = jobDetailService.findMostRecentBuild(new JobIdentifier(stageIdentifier, jobName));
-        return getModelAndView(instance);
+        JobInstance instance = jobInstanceDao.mostRecentJobWithTransitions(new JobIdentifier(stageIdentifier, jobName));
+        return getModelAndView(instance, elasticProfilePluginId(instance));
     }
 
-    private ModelAndView getModelAndView(JobInstance jobDetail) throws Exception {
+    private ModelAndView getModelAndView(JobInstance jobDetail, String elasticProfilePluginId) throws Exception {
         final JobDetailPresentationModel presenter = presenter(jobDetail);
         Map data = new HashMap();
         data.put("presenter", presenter);
+        data.put("websocketEnabled", Toggles.isToggleOn(Toggles.BROWSER_CONSOLE_LOG_WS));
         data.put("l", localizer);
         data.put("isEditableViaUI", goConfigService.isPipelineEditableViaUI(jobDetail.getPipelineName()));
+        data.put("isAgentAlive", goConfigService.hasAgent(jobDetail.getAgentUuid()));
+        if (StringUtils.isNotBlank(elasticProfilePluginId)) {
+            data.put("elasticProfilePluginId", elasticProfilePluginId);
+        }
         return new ModelAndView("build_detail/build_detail_page", data);
     }
+
+    private String elasticProfilePluginId(JobInstance jobInstance) {
+        JobAgentMetadata jobAgentMetadata = jobAgentMetadataDao.load(jobInstance.getId());
+        if (jobAgentMetadata == null) {
+            return null;
+        }
+
+        String pluginId = jobAgentMetadata.elasticProfile().getPluginId();
+        if (elasticAgentMetadataStore.getPluginInfo(pluginId).supportsStatusReport() && jobInstance.currentStatus().isActive()) {
+            return pluginId;
+        }
+
+        return null;
+    }
+
 
     @ErrorHandler
     public ModelAndView handle(HttpServletRequest request, HttpServletResponse response, Exception e) throws Exception {
@@ -148,14 +179,14 @@ public class JobController {
         Object json;
         try {
             JobInstance requestedInstance = jobInstanceService.buildByIdWithTransitions(jobId);
-            JobInstance mostRecentJobInstance = jobDetailService.findMostRecentBuild(requestedInstance.getIdentifier());
+            JobInstance mostRecentJobInstance = jobInstanceDao.mostRecentJobWithTransitions(requestedInstance.getIdentifier());
 
             JobStatusJsonPresentationModel presenter = new JobStatusJsonPresentationModel(mostRecentJobInstance,
-                    goConfigService.agentByUuid(mostRecentJobInstance.getAgentUuid()),
+                    agentService.findAgentObjectByUuid(mostRecentJobInstance.getAgentUuid()),
                     stageService.getBuildDuration(pipelineName, stageName, mostRecentJobInstance));
             json = createBuildInfo(presenter);
         } catch (Exception e) {
-            LOGGER.warn(e);
+            LOGGER.warn(null, e);
             json = errorJsonMap(e);
         }
         return jsonFound(json).respond(response);

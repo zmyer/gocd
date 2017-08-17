@@ -91,7 +91,6 @@ import static org.junit.Assert.assertThat;
 public class PipelineHistoryServiceIntegrationTest {
     @Autowired private GoConfigDao goConfigDao;
     @Autowired private PipelineHistoryService pipelineHistoryService;
-    @Autowired private CachedCurrentActivityService currentActivityService;
     @Autowired private DatabaseAccessHelper dbHelper;
     @Autowired private MaterialRepository materialRepository;
     @Autowired private GoConfigService goConfigService;
@@ -330,7 +329,6 @@ public class PipelineHistoryServiceIntegrationTest {
 
     @Test
     public void shouldNotLoadPipelinesThatTheUserDoesNotHavePermissionToSee() throws Exception {
-        configHelper.addSecurityWithAdminConfig();
         configHelper.setViewPermissionForGroup("group1", "foo");
 
         PipelineInstanceModels history = pipelineHistoryService.loadWithEmptyAsDefault(pipelineOne.pipelineName, Pagination.pageStartingAt(0, 1, 1), "non-admin-user");

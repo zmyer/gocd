@@ -16,13 +16,14 @@
 module ApiV3
   module Plugin
     class SCMPluginInfoRepresenter < BasePluginInfoRepresenter
+
       property :display_name
 
       property :scm_settings,
                skip_nil: true,
                expect_hash: true,
                inherit: false,
-               class: PluggableInstanceSettings,
+               class: com.thoughtworks.go.plugin.domain.common.PluggableInstanceSettings,
                decorator: PluggableInstanceSettingsRepresenter
 
     end

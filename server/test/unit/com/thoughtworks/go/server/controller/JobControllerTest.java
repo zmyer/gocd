@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,11 @@
 
 package com.thoughtworks.go.server.controller;
 
-import com.thoughtworks.go.domain.JobInstance;
-import com.thoughtworks.go.domain.JobResult;
-import com.thoughtworks.go.domain.JobState;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.dto.DurationBean;
 import com.thoughtworks.go.helper.JobInstanceMother;
+import com.thoughtworks.go.server.dao.JobInstanceDao;
+import com.thoughtworks.go.server.domain.Agent;
 import com.thoughtworks.go.server.service.*;
 import com.thoughtworks.go.util.JsonValue;
 import org.junit.Before;
@@ -40,19 +40,21 @@ public class JobControllerTest {
 
     private JobController jobController;
     private JobInstanceService jobInstanceService;
-    private JobDetailService jobDetailService;
+    private JobInstanceDao jobInstanceDao;
     private GoConfigService jobConfigService;
+    private AgentService agentService;
     private StageService stageService;
     private MockHttpServletResponse response;
 
     @Before
     public void setUp() throws Exception {
         jobInstanceService = mock(JobInstanceService.class);
-        jobDetailService = mock(JobDetailService.class);
+        jobInstanceDao = mock(JobInstanceDao.class);
         jobConfigService = mock(GoConfigService.class);
+        agentService = mock(AgentService.class);
         stageService = mock(StageService.class);
         response = new MockHttpServletResponse();
-        jobController = new JobController(jobInstanceService, jobDetailService, jobConfigService, null, null, null, null, stageService, null);
+        jobController = new JobController(jobInstanceService, agentService, jobInstanceDao, jobConfigService, null, null, null, null, stageService, null, null);
     }
 
     @Test
@@ -70,13 +72,15 @@ public class JobControllerTest {
 
 
         when(jobInstanceService.buildByIdWithTransitions(job.getId())).thenReturn(job);
-        when(jobDetailService.findMostRecentBuild(job.getIdentifier())).thenReturn(newJob);
+        when(jobInstanceDao.mostRecentJobWithTransitions(job.getIdentifier())).thenReturn(newJob);
+        when(agentService.findAgentObjectByUuid(newJob.getAgentUuid())).thenReturn(Agent.blankAgent(newJob.getAgentUuid()));
         when(stageService.getBuildDuration(pipelineName, stageName, newJob)).thenReturn(new DurationBean(newJob.getId(), 5l));
 
         ModelAndView modelAndView = jobController.handleRequest(pipelineName, stageName, job.getId(), response);
 
         verify(jobInstanceService).buildByIdWithTransitions(job.getId());
-        verify(jobDetailService).findMostRecentBuild(job.getIdentifier());
+        verify(agentService).findAgentObjectByUuid(newJob.getAgentUuid());
+        verify(jobInstanceDao).mostRecentJobWithTransitions(job.getIdentifier());
         verify(stageService).getBuildDuration(pipelineName, stageName, newJob);
 
         JsonValue json = from(((List) modelAndView.getModel().get("json")).get(0));
@@ -86,5 +90,4 @@ public class JobControllerTest {
         assertThat(buildingInfo.getString("id"), is("2"));
         assertThat(buildingInfo.getString("last_build_duration"), is("5"));
     }
-
 }

@@ -1,23 +1,21 @@
-/*************************GO-LICENSE-START*********************************
- * Copyright 2014 ThoughtWorks, Inc.
+/*
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *************************GO-LICENSE-END***********************************/
+ */
 package com.thoughtworks.go.domain.cctray;
 
-import com.thoughtworks.go.config.Authorization;
-import com.thoughtworks.go.config.CruiseConfig;
-import com.thoughtworks.go.config.PipelineConfigs;
+import com.thoughtworks.go.config.*;
 import com.thoughtworks.go.domain.cctray.viewers.AllowedViewers;
 import com.thoughtworks.go.domain.cctray.viewers.Viewers;
 import com.thoughtworks.go.helper.GoConfigMother;
@@ -96,6 +94,7 @@ public class CcTrayViewAuthorityTest {
 
     @Test
     public void shouldConsiderPipelineGroupAdminsAsViewersOfTheirPipelineGroup() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addPipelineWithGroup(config, "group2", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addUserAsViewerOfPipelineGroup(config, "viewer1", "group2");
@@ -106,12 +105,13 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(2));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("groupadmin1", "groupadmin2")));
-        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("viewer1")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "groupadmin1", "groupadmin2")));
+        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("superadmin1", "viewer1")));
     }
 
     @Test
     public void shouldConsiderAllUsersInPipelineGroupAdminRolesAsViewersOfTheirPipelineGroup() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addPipelineWithGroup(config, "group2", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addUserAsViewerOfPipelineGroup(config, "viewer1", "group2");
@@ -124,12 +124,13 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(2));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("groupadmin1", "groupadmin2", "groupadmin3")));
-        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("viewer1")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "groupadmin1", "groupadmin2", "groupadmin3")));
+        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("superadmin1", "viewer1")));
     }
 
     @Test
     public void shouldCreateAUniqueSetOfNamesWhenSameUserIsPartOfBothGroupAdminUsersAndRolesConfigurations() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
 
         configMother.addRole(config, configMother.createRole("group1_admin_role1", "groupadmin1", "groupadmin2"));
@@ -139,11 +140,12 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(1));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("groupadmin1", "groupadmin2")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "groupadmin1", "groupadmin2")));
     }
 
     @Test
     public void shouldConsiderUsersWithViewPermissionsAsViewersOfTheirPipelineGroup() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addPipelineWithGroup(config, "group2", "pipeline1", "stage1A", "job1A1", "job1A2");
 
@@ -154,12 +156,13 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(2));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("viewer1", "viewer2")));
-        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("viewer3")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "viewer1", "viewer2")));
+        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("superadmin1", "viewer3")));
     }
 
     @Test
     public void shouldConsiderUsersOfRolesWithViewPermissionsAsViewersOfTheirPipelineGroup() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addPipelineWithGroup(config, "group2", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addUserAsViewerOfPipelineGroup(config, "viewer1", "group2");
@@ -172,12 +175,13 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(2));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("groupviewer1", "groupviewer2", "groupviewer3")));
-        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("viewer1")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "groupviewer1", "groupviewer2", "groupviewer3")));
+        assertThat(pipelinesAndTheirViewers.get("group2"), is(viewers("superadmin1", "viewer1")));
     }
 
     @Test
     public void shouldCreateAUniqueSetOfNamesWhenSameUserIsPartOfBothViewUsersAndViewRolesConfigurations() throws Exception {
+        configMother.addUserAsSuperAdmin(config, "superadmin1");
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
 
         configMother.addRole(config, configMother.createRole("group1_view_role1", "viewer1", "groupviewer2"));
@@ -187,7 +191,7 @@ public class CcTrayViewAuthorityTest {
         Map<String, Viewers> pipelinesAndTheirViewers = getGroupsAndTheirViewers();
 
         assertThat(pipelinesAndTheirViewers.size(), is(1));
-        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("viewer1", "groupviewer2")));
+        assertThat(pipelinesAndTheirViewers.get("group1"), is(viewers("superadmin1", "viewer1", "groupviewer2")));
     }
 
     @Test
@@ -269,7 +273,8 @@ public class CcTrayViewAuthorityTest {
     }
 
     @Test
-    public void shouldNotConsiderAllUsersAsViewersOfAGroup_WhenExplicitGroupAdminIsSetup() throws Exception {
+    public void shouldConsiderAllUsersAsViewersOfAGroup_EvenIfExplicitGroupAdminIsSetup_AND_NoGlobalSuperAdminsExist() throws Exception {
+        /* No superuser */
         configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
         configMother.addAdminUserForPipelineGroup(config, "groupadmin1", "group1");
 
@@ -279,8 +284,21 @@ public class CcTrayViewAuthorityTest {
         Viewers viewersOfGroup1 = getGroupsAndTheirViewers().get("group1");
 
         assertThat(viewersOfGroup1.contains("groupadmin1"), is(true));
-        assertThat(viewersOfGroup1.contains("some-user"), is(false));
-        assertThat(viewersOfGroup1.contains("some-other-user"), is(false));
+        assertThat(viewersOfGroup1.contains("some-user"), is(true));
+        assertThat(viewersOfGroup1.contains("some-other-user"), is(true));
+    }
+
+    @Test
+    public void shouldHandleRoleNamesCaseInsensitively() throws Exception {
+        configMother.addRole(config, configMother.createRole("roleWithDifferentCase", "user1", "user2"));
+
+        configMother.addPipelineWithGroup(config, "group1", "pipeline1", "stage1A", "job1A1", "job1A2");
+        configMother.addAdminRoleForPipelineGroup(config, "ROLEWithDIFFERENTCase", "group1");
+
+        Viewers viewersOfGroup = getGroupsAndTheirViewers().get("group1");
+
+        assertThat(viewersOfGroup.contains("user1"), is(true));
+        assertThat(viewersOfGroup.contains("user2"), is(true));
     }
 
     private Map<String, Viewers> getGroupsAndTheirViewers() {

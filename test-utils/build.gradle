@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,54 +15,60 @@
  */
 
 description = 'GoCD Test Utilities'
+
+configurations {
+  copyOnly {
+    transitive = false
+  }
+}
+
 dependencies {
   compile project(':util')
-  compile group: 'org.apache.ant', name: 'ant', version: '1.9.7'
-  compile group: 'org.antlr', name: 'antlr', version: '3.1.1'
-  compile group: 'cglib', name: 'cglib', version: '2.1_3'
-  compile group: 'dom4j', name: 'dom4j', version: '1.6.1'
-  compile group: 'org.objenesis', name: 'objenesis', version: '1.2'
   compile group: 'com.sdicons.jsontools', name: 'jsontools-core', version: '1.7'
-  compile group: 'org.springframework', name: 'spring-test', version: '3.1.3.RELEASE'
+  compile group: 'org.springframework', name: 'spring-test', version: project.versions.spring
   compile group: 'org.eclipse.jetty', name: 'jetty-server', version: versions.jetty
   compile group: 'org.eclipse.jetty', name: 'jetty-plus', version: versions.jetty
   compile group: 'org.eclipse.jetty', name: 'jetty-jmx', version: versions.jetty
   compile group: 'org.eclipse.jetty', name: 'jetty-util', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-servlet', version: versions.jetty
+  compile group: 'org.eclipse.jetty', name: 'jetty-webapp', version: versions.jetty
   compile group: 'com.sun.mail', name: 'mailapi', version: '1.5.6'
-  compile group: 'junit', name: 'junit', version: '4.11'
+  compile group: 'junit', name: 'junit', version: '4.12'
   compile group: 'com.googlecode', name: 'junit-ext', version: '1.0'
   compile group: 'org.hamcrest', name: 'hamcrest-core', version: '1.3'
-  compile group: 'org.hamcrest', name: 'hamcrest-library', version: '1.3'
-  compile group: 'org.mockito', name: 'mockito-core', version: '1.9.5'
-  compile group: 'jmock', name: 'jmock-cglib', version: '1.1.0'
-  compile(group: 'org.jmock', name: 'jmock-junit4', version: '2.4.0') {
-    exclude(module: 'junit-dep')
+  compile(group: 'org.jmock', name: 'jmock', version: '2.4.0') {
+    exclude group: 'org.hamcrest'
   }
-  compile(group: 'org.jmock', name: 'jmock-legacy', version: '2.4.0') {
-    exclude(module: 'cglib-nodep')
-  }
-  compile group: 'net.sf.opencsv', name: 'opencsv', version: '1.8'
-  compile group: 'ognl', name: 'ognl', version: '2.6.9'
-  compile group: 'dnsjava', name: 'dnsjava', version: '1.2.3'
-  compile group: 'org.mozilla', name: 'rhino', version: '1.7.7'
-  compile group: 'com.springsource', name: 'org.objenesis', version: '1.0.0'
-  compile group: 'com.bea', name: 'stax.impl', version: '1.2.0'
-  compile(group: 'org.dbunit', name: 'dbunit', version: '2.5.1')
-  
-  compile group: 'org.eclipse.birt.runtime.3_7_1', name: 'org.mozilla.javascript', version: '1.7.2'
-  compile group: 'org.apache.mina', name: 'mina-core', version: '2.0.0'
+
+  copyOnly project(path: ':agent-launcher', configuration: 'fatJarConfig')
+  copyOnly project(path: ':test-agent')
+  copyOnly project(path: ':tfs-impl-14', configuration: 'fatJarConfig')
+  compile group: 'cglib', name: 'cglib-nodep', version: '2.2'
 }
 
-processResources {
-  dependsOn ':agent-launcher:fatJar', ':test-agent:jar', ':tfs-impl-14:fatJar'
-  from({
-    [
-      project(':agent-launcher').fatJar.archivePath,
-      project(':tfs-impl-14').fatJar.archivePath,
-      project(':test-agent').jar.archivePath
-    ]
-  }) {
-    into "testdata/gen"
-    rename "(.*)-${project.version}.jar", '$1.jar'
+def generatedResourcesOutput = file("resources-generated")
+
+sourceSets {
+  main {
+    resources {
+      output.dir generatedResourcesOutput, builtBy: 'generateResources'
+      srcDirs += generatedResourcesOutput
+    }
   }
 }
+
+clean {
+  delete(generatedResourcesOutput)
+}
+
+task generateResources(type: Copy) {
+  into "$generatedResourcesOutput/testdata/gen"
+  from(project.configurations.copyOnly) {
+    rename "(.*)-${project.version}.(jar|zip)", '$1.$2'
+  }
+}
+
+task prepare {
+  dependsOn generateResources
+}
+

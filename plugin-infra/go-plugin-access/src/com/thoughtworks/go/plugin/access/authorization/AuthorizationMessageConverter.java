@@ -22,6 +22,7 @@ import com.thoughtworks.go.plugin.access.authentication.models.User;
 import com.thoughtworks.go.plugin.access.authorization.models.AuthenticationResponse;
 import com.thoughtworks.go.plugin.api.response.validation.ValidationResult;
 import com.thoughtworks.go.plugin.domain.common.PluginConfiguration;
+import com.thoughtworks.go.plugin.domain.common.VerifyConnectionResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,7 @@ public interface AuthorizationMessageConverter {
 
     String getRoleConfigurationViewFromResponseBody(String responseBody);
 
-    ValidationResult getVerifyConnectionResultFromResponseBody(String responseBody);
+    VerifyConnectionResponse getVerifyConnectionResultFromResponseBody(String responseBody);
 
     String verifyConnectionRequestBody(Map<String, String> configuration);
 
@@ -55,7 +56,15 @@ public interface AuthorizationMessageConverter {
 
     String searchUsersRequestBody(String searchTerm, List<SecurityAuthConfig> authConfigs);
 
-    String processGetRoleConfigsRequest(String requestBody);
-
     String getProcessRoleConfigsResponseBody(List<PluginRoleConfig> roles);
+
+    String grantAccessRequestBody(List<SecurityAuthConfig> authConfigs);
+
+    Map<String,String> getCredentials(String responseBody);
+
+    String authenticateUserRequestBody(Map<String, String> credentials, List<SecurityAuthConfig> authConfigs, List<PluginRoleConfig> roleConfigs);
+
+    String getAuthorizationServerUrl(String responseBody);
+
+    String authorizationServerUrlRequestBody(String pluginId, List<SecurityAuthConfig> authConfigs, String siteUrl);
 }

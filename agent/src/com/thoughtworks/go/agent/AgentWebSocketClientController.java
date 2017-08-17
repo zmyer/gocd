@@ -182,6 +182,7 @@ public class AgentWebSocketClientController extends AgentController {
         BuildVariables buildVariables = new BuildVariables(getAgentRuntimeInfo(), clock);
         BuildSession build = new BuildSession(
                 buildSettings.getBuildId(),
+                getAgentRuntimeInfo().getIdentifier(),
                 buildStateReporter,
                 buildConsole,
                 buildVariables,
@@ -212,7 +213,7 @@ public class AgentWebSocketClientController extends AgentController {
         }
         getAgentRuntimeInfo().cancel();
         if (!build.cancel(30, TimeUnit.SECONDS)) {
-            LOG.error("Waited 30 seconds for canceling job finish, but the job is still running. Maybe canceling job does not work as expected, here is buildSession details: " + buildSession.get());
+            LOG.error("Waited 30 seconds for canceling job finish, but the job is still running. Maybe canceling job does not work as expected, here is buildSession details: {}", buildSession.get());
         }
     }
 
@@ -224,7 +225,7 @@ public class AgentWebSocketClientController extends AgentController {
         runner.handleInstruction(new AgentInstruction(true), getAgentRuntimeInfo());
         runner.waitUntilDone(30);
         if (runner.isRunning()) {
-            LOG.error("Waited 30 seconds for canceling job finish, but the job is still running. Maybe canceling job does not work as expected, here is running job details: " + runner);
+            LOG.error("Waited 30 seconds for canceling job finish, but the job is still running. Maybe canceling job does not work as expected, here is running job details: {}", runner);
         }
     }
 
@@ -240,7 +241,7 @@ public class AgentWebSocketClientController extends AgentController {
 
     @OnWebSocketConnect
     public void onConnect(Session session) {
-        LOG.info(session + " connected.");
+        LOG.info("{} connected.", session);
     }
 
     @OnWebSocketMessage
@@ -251,11 +252,14 @@ public class AgentWebSocketClientController extends AgentController {
             @Override
             public void run() {
                 try {
+                    LOG.debug("Processing message[{}].", msg);
                     process(msg);
                 } catch (InterruptedException e) {
-                    LOG.error("Process message[" + msg + "] is interruptted.", e);
+                    LOG.error("Process message[{}] is interruptted.", msg, e);
                 } catch (RuntimeException e) {
-                    LOG.error("Unexpected error while processing message[" + msg + "]: " + e.getMessage(), e);
+                    LOG.error("Unexpected error while processing message[{}]: {}", msg, e.getMessage(), e);
+                } finally {
+                    LOG.debug("Finished trying to process message[{}].", msg);
                 }
             }
         });
@@ -268,7 +272,7 @@ public class AgentWebSocketClientController extends AgentController {
 
     @OnWebSocketError
     public void onError(Throwable error) {
-        LOG.error(webSocketSessionHandler.getSessionName() + " error", error);
+        LOG.error("{} error", webSocketSessionHandler.getSessionName(), error);
     }
 
     @OnWebSocketFrame

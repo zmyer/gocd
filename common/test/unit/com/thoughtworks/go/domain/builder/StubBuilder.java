@@ -16,16 +16,12 @@
 
 package com.thoughtworks.go.domain.builder;
 
-import com.thoughtworks.go.domain.BuildLogElement;
 import com.thoughtworks.go.domain.RunIfConfigs;
 import com.thoughtworks.go.plugin.access.pluggabletask.TaskExtension;
 import com.thoughtworks.go.util.command.CruiseControlException;
 import com.thoughtworks.go.util.command.EnvironmentVariableContext;
 import com.thoughtworks.go.work.DefaultGoPublisher;
 
-/**
- * Created by marqueslee on 3/1/17.
- */
 public class StubBuilder extends Builder {
     boolean wasCalled;
 
@@ -37,7 +33,7 @@ public class StubBuilder extends Builder {
         super(null, null, "");
     }
 
-    public void build(BuildLogElement buildElement, DefaultGoPublisher publisher,
+    public void build(DefaultGoPublisher publisher,
                       EnvironmentVariableContext environmentVariableContext, TaskExtension taskExtension) throws CruiseControlException {
         wasCalled = true;
     }

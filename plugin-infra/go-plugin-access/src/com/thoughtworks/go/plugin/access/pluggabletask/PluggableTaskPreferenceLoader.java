@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,18 +22,18 @@ import com.thoughtworks.go.plugin.infra.Action;
 import com.thoughtworks.go.plugin.infra.PluginChangeListener;
 import com.thoughtworks.go.plugin.infra.PluginManager;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import static org.apache.log4j.Logger.getLogger;
-
+@Deprecated
 @Component
 public class PluggableTaskPreferenceLoader implements PluginChangeListener {
 
     private PluginManager pluginManager;
     private TaskExtension taskExtension;
-    private static final Logger LOGGER = getLogger(PluggableTaskPreferenceLoader.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(PluggableTaskPreferenceLoader.class);
 
     @Autowired
     public PluggableTaskPreferenceLoader(PluginManager pluginManager, TaskExtension taskExtension) {

@@ -103,7 +103,7 @@ public class AgentServiceIntegrationTest {
     }
 
     private AgentService getAgentService(AgentInstances agentInstances) {
-        return new AgentService(agentConfigService, new SystemEnvironment(), agentInstances, environmentConfigService, goConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService);
+        return new AgentService(agentConfigService, new SystemEnvironment(), agentInstances, environmentConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService);
     }
 
     @Test
@@ -227,7 +227,7 @@ public class AgentServiceIntegrationTest {
     public void shouldNotAllowUpdatingEnvironmentsWhenNotAdmin() throws IOException {
         String agentId = "agent-id";
         HttpOperationResult operationResult = new HttpOperationResult();
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.modifyEnvironments(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(UUID), Arrays.asList(new TriStateSelection("uat", TriStateSelection.Action.remove)));
         assertThat(operationResult.httpCode(), is(401));
@@ -338,7 +338,7 @@ public class AgentServiceIntegrationTest {
         AgentInstance instance = AgentInstanceMother.idle(date, "CCeDev01");
         ((AgentRuntimeInfo)ReflectionUtil.getField(instance, "agentRuntimeInfo")).setOperatingSystem("Minix");
         EmailSender mailSender = mock(EmailSender.class);
-        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, goConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
+        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
         AgentInstances agentInstances = (AgentInstances) ReflectionUtil.getField(agentService, "agentInstances");
         agentInstances.add(instance);
 
@@ -357,7 +357,7 @@ public class AgentServiceIntegrationTest {
         AgentInstance instance = AgentInstanceMother.idle(date, "CCeDev01");
         ((AgentRuntimeInfo)ReflectionUtil.getField(instance, "agentRuntimeInfo")).setOperatingSystem("Minix");
         EmailSender mailSender = mock(EmailSender.class);
-        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, goConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
+        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
         AgentInstances agentInstances = (AgentInstances) ReflectionUtil.getField(agentService, "agentInstances");
         agentInstances.add(instance);
 
@@ -390,7 +390,7 @@ public class AgentServiceIntegrationTest {
         EmailSender mailSender = mock(EmailSender.class);
 
         agentDao.associateCookie(instance.getAgentIdentifier(), "rotten-cookie");
-        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, goConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
+        AgentService agentService = new AgentService(agentConfigService, new SystemEnvironment(), environmentConfigService, securityService, agentDao, new UuidGenerator(), serverHealthService, mailSender);
         AgentInstances agentInstances = (AgentInstances) ReflectionUtil.getField(agentService, "agentInstances");
         agentInstances.add(instance);
 
@@ -543,7 +543,7 @@ public class AgentServiceIntegrationTest {
     public void shouldNotAllowDisablingAgentWhenNotAdmin() throws IOException {
         String agentId = "agent-id";
         HttpOperationResult operationResult = new HttpOperationResult();
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.disableAgents(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(agentId));
         assertThat(operationResult.httpCode(), is(401));
@@ -553,7 +553,7 @@ public class AgentServiceIntegrationTest {
     @Test
     public void shouldNotAllowAddingResourcesWhenNotAdmin() throws IOException {
         String agentId = "agent-id";
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         HttpOperationResult operationResult = new HttpOperationResult();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.modifyResources(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(agentId), Arrays.asList(new TriStateSelection("dont-care", TriStateSelection.Action.add)));
@@ -634,7 +634,7 @@ public class AgentServiceIntegrationTest {
     @Test
     public void shouldReturn401WhenAUnauthorizedUserTriesToEnable() throws IOException {
         String agentId = "agent-id";
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         HttpOperationResult operationResult = new HttpOperationResult();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.enableAgents(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(agentId));
@@ -751,7 +751,7 @@ public class AgentServiceIntegrationTest {
 
     @Test
     public void shouldReturn401WhenAUnauthorizedUserTriesToDelete() throws IOException {
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         HttpOperationResult operationResult = new HttpOperationResult();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.deleteAgents(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(UUID));
@@ -803,7 +803,7 @@ public class AgentServiceIntegrationTest {
 
     @Test
     public void shouldReturn401WhenAUnauthorizedUserTriesToDeleteAgents() throws IOException {
-        CONFIG_HELPER.addSecurityWithPasswordFile();
+        CONFIG_HELPER.enableSecurity();
         HttpOperationResult operationResult = new HttpOperationResult();
         CONFIG_HELPER.addAdmins("admin1");
         agentService.deleteAgents(new Username(new CaseInsensitiveString("not-admin")), operationResult, Arrays.asList(UUID));

@@ -16,28 +16,30 @@
 
 package com.thoughtworks.go.server.service;
 
-import com.thoughtworks.go.domain.ConsoleOut;
+import com.thoughtworks.go.domain.ConsoleConsumer;
+import com.thoughtworks.go.domain.ConsoleStreamer;
 import com.thoughtworks.go.domain.JobIdentifier;
 import com.thoughtworks.go.domain.LocatableEntity;
 import com.thoughtworks.go.domain.exception.IllegalArtifactLocationException;
 import com.thoughtworks.go.server.view.artifacts.ArtifactDirectoryChooser;
 import com.thoughtworks.go.server.view.artifacts.BuildIdArtifactLocator;
 import com.thoughtworks.go.server.view.artifacts.PathBasedArtifactsLocator;
-import com.thoughtworks.go.util.FileUtil;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.*;
+import java.nio.file.Path;
 
 import static com.thoughtworks.go.util.ArtifactLogUtil.getConsoleOutputFolderAndFileName;
 
 @Component
 public class ConsoleService {
 
-    public static final Logger LOGGER = Logger.getLogger(ConsoleService.class);
+    public static final Logger LOGGER = LoggerFactory.getLogger(ConsoleService.class);
     private ArtifactDirectoryChooser chooser;
     public static final int DEFAULT_CONSOLE_LOG_LINE_BUFFER_SIZE = 1024;
     private ArtifactsDirHolder artifactsDirHolder;
@@ -58,72 +60,36 @@ public class ConsoleService {
         chooser.add(new BuildIdArtifactLocator(artifactsDirHolder.getArtifactsDir()));
     }
 
-    ConsoleOut getConsoleOut(int startingLine, InputStream inputStream) throws IOException {
-        int lineNumber = 0;
-
-        StringBuilder builder = new StringBuilder();
-        try {
-            BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-            String consoleLine;
-            while (null != (consoleLine = reader.readLine())) {
-                if (lineNumber >= startingLine) {
-                    builder.append(consoleLine);
-                    builder.append(FileUtil.lineSeparator());
-                }
-                lineNumber++;
-            }
-        } catch (FileNotFoundException ex) {
-            String message = "Could not read console out: " + ex.getMessage();
-            LOGGER.error(message);
-            LOGGER.trace(message, ex);
-        } finally {
-            inputStream.close();
-        }
-        return new ConsoleOut(builder.toString(), startingLine, lineNumber);
+    public ConsoleConsumer getStreamer(long startingLine, JobIdentifier identifier) throws IllegalArtifactLocationException {
+        Path path = consoleLogFile(identifier).toPath();
+        return new ConsoleStreamer(path, startingLine);
     }
 
-    public ConsoleOut getConsoleOut(JobIdentifier identifier, int startingLine) throws IOException, IllegalArtifactLocationException {
-        return getConsoleOut(startingLine, new FileInputStream(findConsoleArtifact(identifier)));
+    public File consoleLogArtifact(LocatableEntity jobIdentifier) throws IllegalArtifactLocationException {
+        return chooser.findArtifact(jobIdentifier, getConsoleOutputFolderAndFileName());
     }
 
-    public File findConsoleArtifact(JobIdentifier identifier) throws IllegalArtifactLocationException {
-        File file = chooser.temporaryConsoleFile(identifier);
-        if (!file.exists()) {
-            file = chooser.findArtifact(identifier, getConsoleOutputFolderAndFileName());
-        }
-        return file;
-    }
-
-
-    public File consoleLogFile(JobIdentifier jobIdentifier) throws IllegalArtifactLocationException {
-        File file = chooser.temporaryConsoleFile(jobIdentifier);
-        if (file.exists()) {
-            return file;
-        }
-        File finalConsole = chooser.findArtifact(jobIdentifier, getConsoleOutputFolderAndFileName());
-        if (finalConsole.exists()) return finalConsole;
-        return file;
+    public File consoleLogFile(LocatableEntity jobIdentifier) throws IllegalArtifactLocationException {
+        File artifact = consoleLogArtifact(jobIdentifier);
+        return artifact.exists() ? artifact : chooser.temporaryConsoleFile(jobIdentifier);
     }
 
     public void appendToConsoleLog(JobIdentifier jobIdentifier, String text) throws IllegalArtifactLocationException, IOException {
-        File file = findConsoleArtifact(jobIdentifier);
-        updateConsoleLog(file, new ByteArrayInputStream(text.getBytes()));
+        updateConsoleLog(consoleLogFile(jobIdentifier), new ByteArrayInputStream(text.getBytes()));
     }
 
     public boolean updateConsoleLog(File dest, InputStream in) throws IOException {
         File parentFile = dest.getParentFile();
         parentFile.mkdirs();
 
-        LOGGER.trace("Updating console log [" + dest.getAbsolutePath() + "]");
+        LOGGER.trace("Updating console log [{}]", dest.getAbsolutePath());
         try (OutputStream out = new BufferedOutputStream(new FileOutputStream(dest, dest.exists()))) {
             IOUtils.copy(in, out);
         } catch (IOException e) {
-            LOGGER.error("Failed to update console log at : [" + dest.getAbsolutePath() + "]", e);
+            LOGGER.error("Failed to update console log at : [{}]", dest.getAbsolutePath(), e);
             return false;
         }
-        if (LOGGER.isTraceEnabled()) {
-            LOGGER.trace("Console log [" + dest.getAbsolutePath() + "] saved.");
-        }
+        LOGGER.trace("Console log [{}] saved.", dest.getAbsolutePath());
         return true;
     }
 
@@ -134,7 +100,7 @@ public class ConsoleService {
             // Job cancellation skips temporary file creation. Force create one if it does not exist.
             FileUtils.touch(from);
 
-            File to = chooser.findArtifact(locatableEntity, getConsoleOutputFolderAndFileName());
+            File to = consoleLogArtifact(locatableEntity);
             FileUtils.moveFile(from, to);
         } catch (IOException | IllegalArtifactLocationException e) {
             throw new RuntimeException(e);

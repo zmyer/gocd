@@ -42,17 +42,21 @@ import com.thoughtworks.go.server.transaction.TransactionTemplate;
 import com.thoughtworks.go.util.Clock;
 import com.thoughtworks.go.util.GoConstants;
 import com.thoughtworks.go.util.TimeProvider;
-import org.apache.log4j.Logger;
 import org.dbunit.DataSourceDatabaseTester;
 import org.dbunit.IDatabaseTester;
 import org.dbunit.database.AmbiguousTableNameException;
 import org.dbunit.dataset.DefaultDataSet;
 import org.dbunit.dataset.DefaultTable;
 import org.dbunit.operation.DatabaseOperation;
+import org.hamcrest.core.Is;
+import org.hamcrest.core.IsNot;
 import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.joda.time.DateTime;
+import org.junit.Assert;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.orm.hibernate3.HibernateCallback;
@@ -75,8 +79,6 @@ import static com.thoughtworks.go.helper.ModificationsMother.modifyOneFile;
 
 @Component
 public class DatabaseAccessHelper extends HibernateDaoSupport {
-    private static final Logger LOG = Logger.getLogger(DatabaseAccessHelper.class);
-
     private IDatabaseTester databaseTester;
     private StageDao stageDao;
     private PipelineSqlMapDao pipelineDao;
@@ -88,13 +90,13 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
 
     public static final String AGENT_UUID = "123456789-123";
     private DataSource dataSource;
-    private UserDao userDao;
     private SqlMapClient sqlMapClient;
     private MaterialRepository materialRepository;
     private GoCache goCache;
     private PipelineService pipelineService;
     private String md5 = "md5-test";
     private InstanceFactory instanceFactory;
+    private JobAgentMetadataDao jobAgentMetadataDao;
 
     @Deprecated // Should not be creating a new spring context for every test
     public DatabaseAccessHelper() throws AmbiguousTableNameException {
@@ -112,6 +114,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
         this.materialRepository = (MaterialRepository) context.getBean("materialRepository");
         this.goCache = (GoCache) context.getBean("goCache");
         this.instanceFactory = (InstanceFactory) context.getBean("instanceFactory");
+        this.jobAgentMetadataDao = (JobAgentMetadataDao) context.getBean("jobAgentMetadataDao");
         setSessionFactory((SessionFactory) context.getBean("sessionFactory"));
         return context;
     }
@@ -135,7 +138,8 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
                                 TransactionTemplate transactionTemplate,
                                 TransactionSynchronizationManager transactionSynchronizationManager,
                                 GoCache goCache,
-                                PipelineService pipelineService, InstanceFactory instanceFactory) throws AmbiguousTableNameException {
+                                PipelineService pipelineService, InstanceFactory instanceFactory,
+                                JobAgentMetadataDao jobAgentMetadataDao) throws AmbiguousTableNameException {
         this.dataSource = dataSource;
         this.sqlMapClient = sqlMapClient;
         this.stageDao = stageDao;
@@ -147,6 +151,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
         this.goCache = goCache;
         this.pipelineService = pipelineService;
         this.instanceFactory = instanceFactory;
+        this.jobAgentMetadataDao = jobAgentMetadataDao;
         this.pipelineDao = (PipelineSqlMapDao) pipelineDao;
         this.materialRepository = materialRepository;
         setSessionFactory(sessionFactory);
@@ -161,6 +166,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
         dataSet.addTable(new DefaultTable("agents"));
 
         dataSet.addTable(new DefaultTable("pipelines"));
+        dataSet.addTable(new DefaultTable("pipelinestates"));
         dataSet.addTable(new DefaultTable("materials"));
         dataSet.addTable(new DefaultTable("modifications"));
         dataSet.addTable(new DefaultTable("pipelineMaterialRevisions"));
@@ -184,6 +190,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
 
         dataSet.addTable(new DefaultTable("stageArtifactCleanupProhibited"));
         dataSet.addTable(new DefaultTable("serverBackups"));
+        dataSet.addTable(new DefaultTable("jobAgentMetadata"));
 
         databaseTester.setDataSet(dataSet);
     }
@@ -551,11 +558,11 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
     }
 
     static void assertNotInserted(long instanceId) {
-        org.junit.Assert.assertThat("Already thinks it's inserted", instanceId, org.hamcrest.core.Is.is(PersistentObject.NOT_PERSISTED));
+        Assert.assertThat("Already thinks it's inserted", instanceId, Is.is(PersistentObject.NOT_PERSISTED));
     }
 
     static void assertIsInserted(long instanceId) {
-        org.junit.Assert.assertThat("Not inserted", instanceId, org.hamcrest.core.Is.is(org.hamcrest.core.IsNot.not(PersistentObject.NOT_PERSISTED)));
+        Assert.assertThat("Not inserted", instanceId, Is.is(IsNot.not(PersistentObject.NOT_PERSISTED)));
     }
 
     public Pipeline schedulePipeline(PipelineConfig pipelineConfig, Clock clock) {
@@ -607,7 +614,7 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
 
     public MaterialRevision addRevisionsWithModifications(Material material, Modification... modifications) {
         final MaterialRevision revision = filterUnsaved(new MaterialRevision(material, modifications));
-        if (revision.getModifications().isEmpty()){
+        if (revision.getModifications().isEmpty()) {
             return revision;
         }
         transactionTemplate.execute(new TransactionCallbackWithoutResult() {
@@ -642,5 +649,9 @@ public class DatabaseAccessHelper extends HibernateDaoSupport {
         MaterialRevision depRev = addRevisionsWithModifications(dependencyMaterial, modifications.toArray(new Modification[0]));
         materialRevisions.add(depRev);
         return Arrays.asList(depRev);
+    }
+
+    public void addJobAgentMetadata(JobAgentMetadata jobAgentMetadata) {
+        jobAgentMetadataDao.save(jobAgentMetadata);
     }
 }

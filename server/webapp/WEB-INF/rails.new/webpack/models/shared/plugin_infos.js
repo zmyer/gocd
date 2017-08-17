@@ -20,6 +20,7 @@ const Mixins                    = require('models/mixins/model_mixins');
 const Routes                    = require('gen/js-routes');
 const CrudMixins                = require('models/mixins/crud_mixins');
 const PluggableInstanceSettings = require('models/shared/plugin_infos/pluggable_instance_settings');
+const Capabilities              = require('models/shared/plugin_infos/capabilities');
 const About                     = require('models/shared/plugin_infos/about');
 
 const PluginInfos = function (data) {
@@ -82,6 +83,17 @@ PluginInfos.PluginInfo.Authentication.fromJSON = (data = {}) => new PluginInfos.
   imageUrl: _.get(data, '_links.image.href')
 });
 
+PluginInfos.PluginInfo.ConfigRepo = function (data) {
+  PluginInfos.PluginInfo.call(this, "configrepo", data);
+};
+
+PluginInfos.PluginInfo.ConfigRepo.fromJSON = (data = {}) => new PluginInfos.PluginInfo.ConfigRepo({
+  id:       data.id,
+  version:  data.version,
+  about:    About.fromJSON(data.about),
+  imageUrl: _.get(data, '_links.image.href')
+});
+
 PluginInfos.PluginInfo.Notification = function (data) {
   PluginInfos.PluginInfo.call(this, "notification", data);
 };
@@ -104,8 +116,8 @@ PluginInfos.PluginInfo.PackageRepository.fromJSON = (data = {}) => new PluginInf
   id:                 data.id,
   version:            data.version,
   about:              About.fromJSON(data.about),
-  packageSettings:    PluggableInstanceSettings.fromJSON(data.package_settings),
-  repositorySettings: PluggableInstanceSettings.fromJSON(data.repository_settings),
+  packageSettings:    PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.package_settings),
+  repositorySettings: PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.repository_settings),
   imageUrl:           _.get(data, '_links.image.href')
 });
 
@@ -119,7 +131,7 @@ PluginInfos.PluginInfo.Task.fromJSON = (data = {}) => new PluginInfos.PluginInfo
   id:           data.id,
   version:      data.version,
   about:        About.fromJSON(data.about),
-  taskSettings: PluggableInstanceSettings.fromJSON(data.task_settings),
+  taskSettings: PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.task_settings),
   imageUrl:     _.get(data, '_links.image.href'),
 });
 
@@ -133,7 +145,7 @@ PluginInfos.PluginInfo.SCM.fromJSON = (data = {}) => new PluginInfos.PluginInfo.
   id:          data.id,
   version:     data.version,
   about:       About.fromJSON(data.about),
-  scmSettings: PluggableInstanceSettings.fromJSON(data.scm_settings),
+  scmSettings: PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.scm_settings),
   imageUrl:    _.get(data, '_links.image.href'),
 });
 
@@ -142,14 +154,17 @@ PluginInfos.PluginInfo.Authorization = function (data) {
 
   this.authConfigSettings = Stream(data.authConfigSettings);
   this.roleSettings       = Stream(data.roleSettings);
+  this.capabilities       = Stream(data.capabilities);
+
 };
 
 PluginInfos.PluginInfo.Authorization.fromJSON = (data = {}) => new PluginInfos.PluginInfo.Authorization({
   id:                 data.id,
   version:            data.version,
   about:              About.fromJSON(data.about),
-  authConfigSettings: PluggableInstanceSettings.fromJSON(data.auth_config_settings),
-  roleSettings:       PluggableInstanceSettings.fromJSON(data.role_settings),
+  authConfigSettings: PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.auth_config_settings),
+  roleSettings:       PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.role_settings),
+  capabilities:       Capabilities.fromJSON(data.capabilities),
   imageUrl:           _.get(data, '_links.image.href'),
 });
 
@@ -162,13 +177,19 @@ PluginInfos.PluginInfo.ElasticAgent.fromJSON = (data = {}) => new PluginInfos.Pl
   id:              data.id,
   version:         data.version,
   about:           About.fromJSON(data.about),
-  profileSettings: PluggableInstanceSettings.fromJSON(data.profile_settings),
+  profileSettings: PluggableInstanceSettings.fromJSON(data.extension_info && data.extension_info.profile_settings),
   imageUrl:        _.get(data, '_links.image.href'),
 });
 
 PluginInfos.PluginInfo.createByType = ({type}) => new PluginInfos.Types[type]({});
 
-PluginInfos.PluginInfo.fromJSON = (data = {}) => PluginInfos.Types[data.type].fromJSON(data);
+PluginInfos.PluginInfo.fromJSON = (data = {}) => {
+  if (PluginInfos.Types[data.type]) {
+    return PluginInfos.Types[data.type].fromJSON(data);
+  } else {
+    throw `Could not find plugin type ${data.type}`;
+  }
+};
 
 PluginInfos.Types = {
   'authentication':     PluginInfos.PluginInfo.Authentication,
@@ -178,6 +199,7 @@ PluginInfos.Types = {
   'package-repository': PluginInfos.PluginInfo.PackageRepository,
   'task':               PluginInfos.PluginInfo.Task,
   'scm':                PluginInfos.PluginInfo.SCM,
+  'configrepo':         PluginInfos.PluginInfo.ConfigRepo,
 };
 
 Mixins.fromJSONCollection({

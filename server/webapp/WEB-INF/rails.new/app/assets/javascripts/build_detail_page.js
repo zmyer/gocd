@@ -18,19 +18,26 @@
   "use strict";
 
   function MultiplexingTransformer(transformers) {
-    this.transform = function processAllTransformers(logLines) {
+    this.transform = function processTransformOnAllTransformers(logLines) {
       for (var i = 0, len = transformers.length; i < len; i++) {
         transformers[i].transform(logLines);
       }
     };
 
+    this.invoke = function processInvokeOnAllTransformers(callback, args) {
+      for (var i = 0, len = transformers.length; i < len; i++) {
+        transformers[i].invoke(callback, args);
+      }
+    };
+
+    // slightly different signature to allow selective dequeue
     this.dequeue = function dequeueTransformers(name) {
       for (var i = 0, len = transformers.length; i < len; i++) {
         if (!name || transformers[i].name === name) {
           transformers[i].dequeue();
         }
       }
-    }
+    };
   }
 
   $(function initConsolePageDomReady() {
@@ -45,9 +52,8 @@
 
     var build = $("[data-console-url]");
 
-    function triggerLogDequeue() {
-      var subTab = this;
-      jobDetails.trigger("dequeue", subTab.tab_name);
+    function triggerLogDequeue(tabName) {
+      jobDetails.trigger("dequeue", tabName);
     }
 
     var uid = [jobDetails.data("pipeline"), jobDetails.data("stage"), jobDetails.data("job"), jobDetails.data("build")].join("-");
@@ -83,13 +89,6 @@
         var tfm = new LogOutputTransformer(container, FoldableSection, tabsManager.getCurrentTab() !== name);
         tfm.name = name;
         transformers.push(tfm);
-
-        container.find(".console-action-bar").on("click", ".toggle-timestamps", function toggleLogTimestamps(e) {
-          e.stopPropagation();
-          e.preventDefault();
-
-          container.toggleClass("with-timestamps");
-        });
       });
 
       build.find(".console-action-bar").on("click", ".toggle-timestamps", function toggleLogTimestamps(e) {
@@ -97,38 +96,43 @@
         e.preventDefault();
 
         $(e.currentTarget).closest(".console-area").toggleClass("with-timestamps");
-      });
-
-      build.find(".console-action-bar").on("click", ".toggle-folding", function toggleCollapseAll(e) {
+      }).on("click", ".toggle-folding", function toggleCollapseAll(e) {
         e.stopPropagation();
         e.preventDefault();
 
         var trigger = $(e.currentTarget).removeData("collapsed");
-        var consoleArea = trigger.closest(".console-area");
-        var foldableSections = consoleArea.find(".log-fs-type");
+        var consoleArea = trigger.closest(".console-action-bar").siblings(".buildoutput_pre");
+        var foldableSections = consoleArea.children(".log-fs-type");
 
         if (!foldableSections.length) return;
 
-        if (trigger.data("collapsed")) {
+        if (trigger.attr("data-collapsed") === "true") {
           foldableSections.addClass("open");
           trigger.attr("data-collapsed", "false");
         } else {
           foldableSections.removeClass("open");
           trigger.attr("data-collapsed", "true");
         }
-        consoleArea.find(".buildoutput_pre").trigger("consoleUpdated");
+
+        consoleArea.trigger("consoleUpdated");
       });
 
       var multiTransformer = new MultiplexingTransformer(transformers);
-
-      executor.register(new ConsoleLogObserver(consoleUrl, multiTransformer, {
+      var lifecycleOptions = {
         onUpdate:   function () {
           containers.trigger("consoleUpdated");
         },
         onComplete: function () {
           containers.trigger("consoleCompleted");
         }
-      }));
+      };
+
+      // fallback to AJAX polling log tailer
+      var legacyConsolePoller = new ConsoleLogObserver(consoleUrl, multiTransformer, lifecycleOptions);
+      executor.register(legacyConsolePoller);
+
+      // websocket log tailer
+      new ConsoleLogSocket(legacyConsolePoller, multiTransformer, lifecycleOptions);
 
       jobDetails.on("dequeue", function (e, name) {
         multiTransformer.dequeue(name);

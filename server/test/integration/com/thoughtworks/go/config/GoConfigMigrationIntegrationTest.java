@@ -22,7 +22,6 @@ import com.thoughtworks.go.config.materials.dependency.DependencyMaterialConfig;
 import com.thoughtworks.go.config.materials.mercurial.HgMaterialConfig;
 import com.thoughtworks.go.config.pluggabletask.PluggableTask;
 import com.thoughtworks.go.config.registry.ConfigElementImplementationRegistry;
-import com.thoughtworks.go.config.server.security.ldap.BasesConfig;
 import com.thoughtworks.go.config.validation.GoConfigValidity;
 import com.thoughtworks.go.domain.GoConfigRevision;
 import com.thoughtworks.go.domain.Task;
@@ -32,6 +31,7 @@ import com.thoughtworks.go.domain.packagerepository.PackageDefinition;
 import com.thoughtworks.go.domain.packagerepository.PackageRepositories;
 import com.thoughtworks.go.domain.packagerepository.PackageRepository;
 import com.thoughtworks.go.helper.ConfigFileFixture;
+import com.thoughtworks.go.security.GoCipher;
 import com.thoughtworks.go.server.service.GoConfigService;
 import com.thoughtworks.go.server.util.ServerVersion;
 import com.thoughtworks.go.serverhealth.*;
@@ -59,6 +59,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import static com.thoughtworks.go.domain.packagerepository.ConfigurationPropertyMother.create;
 import static com.thoughtworks.go.util.ExceptionUtils.bomb;
@@ -92,6 +93,8 @@ public class GoConfigMigrationIntegrationTest {
 
     private String currentGoServerVersion;
     private MagicalGoConfigXmlLoader loader;
+    private String password;
+    private String encryptedPassword;
 
     @Before
     public void setUp() throws Exception {
@@ -103,6 +106,8 @@ public class GoConfigMigrationIntegrationTest {
         serverHealthService.removeAllLogs();
         currentGoServerVersion = serverVersion.version();
         loader = new MagicalGoConfigXmlLoader(new ConfigCache(), ConfigElementImplementationRegistryMother.withNoPlugins());
+        password = UUID.randomUUID().toString();
+        encryptedPassword = new GoCipher().encrypt(password);
     }
 
     @After
@@ -144,7 +149,7 @@ public class GoConfigMigrationIntegrationTest {
 
     @Test
     public void shouldMigrateConfigContentAsAString() throws Exception {
-        String newContent = new GoConfigMigration(configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins())
+        String newContent = new GoConfigMigration(configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), systemEnvironment)
                 .upgradeIfNecessary(ConfigFileFixture.VERSION_0);
         assertThat(newContent, containsString("schemaVersion=\"" + GoConfigSchema.currentSchemaVersion() + "\""));
     }
@@ -152,7 +157,7 @@ public class GoConfigMigrationIntegrationTest {
     @Test
     public void shouldNotMigrateConfigContentAsAStringWhenAlreadyUpToDate() throws Exception {
         GoConfigMigration configMigration = new GoConfigMigration(configRepository, new TimeProvider(), configCache,
-                ConfigElementImplementationRegistryMother.withNoPlugins());
+                ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment());
         String newContent = configMigration.upgradeIfNecessary(ConfigFileFixture.VERSION_0);
         assertThat(newContent, is(configMigration.upgradeIfNecessary(newContent)));
     }
@@ -286,7 +291,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment());
         FileUtils.writeStringToFile(configFile, ConfigFileFixture.JOBS_WITH_DIFFERNT_CASE);
 
         upgrader.upgradeIfNecessary(configFile, currentGoServerVersion);
@@ -301,7 +306,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         throw new AssertionError("upgrade failed!!!!!");
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment());
         FileUtils.writeStringToFile(configFile, ConfigFileFixture.DEFAULT_XML_WITH_2_AGENTS);
         configRepository.checkin(new GoConfigRevision("dummy-content", "some-md5", "loser", "100.3.1", new TimeProvider()));
 
@@ -465,7 +470,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment());
         String configContent = ConfigFileFixture.configWithPipeline(String.format(
                 "<pipeline name='pipeline1'>"
                         + "    <materials>"
@@ -540,7 +545,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins()
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment()
         );
         String configContent = ConfigFileFixture.configWithPipeline(String.format(
                 "<pipeline name='pipeline1'>"
@@ -578,7 +583,7 @@ public class GoConfigMigrationIntegrationTest {
                     public void handle(Exception e) {
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins());
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment());
 
         String content = "<cruise schemaVersion='" + 47 + "'>\n"
                 + "<server artifactsdir=\"logs\" siteUrl=\"http://go-server-site-url:8153\" secureSiteUrl=\"https://go-server-site-url:8154\" jobTimeout=\"60\">\n"
@@ -676,14 +681,17 @@ public class GoConfigMigrationIntegrationTest {
         CruiseConfig config = migrateConfigAndLoadTheNewConfig(content, 61);
 
         LdapConfig ldapConfig = config.server().security().ldapConfig();
-        BasesConfig basesConfig = ldapConfig.getBasesConfig();
-        assertThat(basesConfig.size(), is(1));
-        assertThat(basesConfig.first().getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com"));
-        assertThat(ldapConfig.searchFilter(), is("(sAMAccountName={0})"));
-        assertThat(ldapConfig.uri(), is("some_url"));
-        assertThat(ldapConfig.managerDn(), is("some_manager_dn"));
-        assertThat(ldapConfig.managerPassword(), is("foo"));
 
+        assertThat(ldapConfig.isEnabled(), is(false));
+
+        SecurityAuthConfig migratedLdapConfig = config.server().security().securityAuthConfigs().get(0);
+        assertThat(migratedLdapConfig.getId(), is(not(nullValue())));
+        assertThat(migratedLdapConfig.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(migratedLdapConfig.getProperty("Url").getValue(), is("some_url"));
+        assertThat(migratedLdapConfig.getProperty("ManagerDN").getValue(), is("some_manager_dn"));
+        assertThat(migratedLdapConfig.getProperty("Password").getValue(), is("foo"));
+        assertThat(migratedLdapConfig.getProperty("SearchBases").getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com\n"));
+        assertThat(migratedLdapConfig.getProperty("UserLoginFilter").getValue(), is("(sAMAccountName={0})"));
     }
 
     @Test
@@ -699,14 +707,16 @@ public class GoConfigMigrationIntegrationTest {
         CruiseConfig config = migrateConfigAndLoadTheNewConfig(content, 61);
 
         LdapConfig ldapConfig = config.server().security().ldapConfig();
-        BasesConfig basesConfig = ldapConfig.getBasesConfig();
-        assertThat(basesConfig.size(), is(1));
-        assertThat(basesConfig.first().getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com"));
-        assertThat(ldapConfig.uri(), is("some_url"));
-        assertThat(ldapConfig.searchFilter(), isEmptyString());
-        assertThat(ldapConfig.managerDn(), isEmptyString());
-        assertThat(ldapConfig.managerPassword(), isEmptyString());
-        assertThat(ldapConfig.getEncryptedManagerPassword(), is(nullValue()));
+        assertThat(ldapConfig.isEnabled(), is(false));
+
+        SecurityAuthConfig migratedLdapConfig = config.server().security().securityAuthConfigs().get(0);
+        assertThat(migratedLdapConfig.getId(), is(not(nullValue())));
+        assertThat(migratedLdapConfig.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(migratedLdapConfig.getProperty("Url").getValue(), is("some_url"));
+        assertThat(migratedLdapConfig.getProperty("ManagerDN").getValue(), is(""));
+        assertThat(migratedLdapConfig.getProperty("Password").getValue(), is(""));
+        assertThat(migratedLdapConfig.getProperty("SearchBases").getValue(), is("ou=Enterprise,ou=Principal,dc=corporate,dc=thoughtworks,dc=com\n"));
+        assertThat(migratedLdapConfig.getProperty("UserLoginFilter").getValue(), is(""));
     }
 
     @Test
@@ -1462,6 +1472,310 @@ public class GoConfigMigrationIntegrationTest {
         assertThat(profiles.get(1), is(expectedAWSProfile));
     }
 
+    @Test
+    public void shouldMigrateLdapToAuthConfigAsPartOfMigration91() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<ldap uri=\"ldap://ldap.server\" managerDn=\"cn=admin,ou=system,dc=example,dc=com\" encryptedManagerPassword=\""+encryptedPassword+"\" searchFilter=\"(|(sAMAccountName={0})(mail={0}))\">\n" +
+                "   <bases>\n" +
+                "       <base value=\"ou=system\" />\n" +
+                "       <base value=\"ou=employee\" />\n" +
+                "   </bases>\n" +
+                "</ldap>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(1));
+
+        SecurityAuthConfig ldap = migratedConfig.server().security().securityAuthConfigs().get(0);
+        assertThat(ldap.getId(), is(not(nullValue())));
+        assertThat(ldap.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(ldap.getProperty("Url").getValue(), is("ldap://ldap.server"));
+        assertThat(ldap.getProperty("ManagerDN").getValue(), is("cn=admin,ou=system,dc=example,dc=com"));
+        assertThat(ldap.getProperty("Password").getValue(), is(password));
+        assertThat(ldap.getProperty("Password").getEncryptedValue(), is(encryptedPassword));
+        assertThat(ldap.getProperty("SearchBases").getValue(), is("ou=system\nou=employee\n"));
+        assertThat(ldap.getProperty("UserLoginFilter").getValue(), is("(|(sAMAccountName={0})(mail={0}))"));
+    }
+
+    @Test
+    public void shouldAddIdOnConfigRepoAsPartOfMigration94() throws Exception {
+        String configXml = "<cruise schemaVersion='93'>" +
+                "<config-repos>\n" +
+                "   <config-repo plugin=\"json.config.plugin\">\n" +
+                "     <git url=\"https://github.com/tomzo/gocd-json-config-example.git\" />\n" +
+                "   </config-repo>\n" +
+                "</config-repos>" +
+                "</cruise>";
+
+        String migratedContent = migrateXmlString(configXml, 93);
+        assertThat(migratedContent, containsString("id="));
+    }
+
+    @Test
+    public void shouldKeepExistingAuthConfigsWhileMigratingLdapAsPartOfMigration91() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<ldap uri=\"ldap://ldap.server\" managerDn=\"cn=admin,ou=system,dc=example,dc=com\" encryptedManagerPassword=\"" + encryptedPassword + "\" searchFilter=\"uid\">\n" +
+                "   <bases>\n" +
+                "       <base value=\"ou=system\" />\n" +
+                "       <base value=\"ou=employee\" />\n" +
+                "   </bases>\n" +
+                "</ldap>" +
+                "<authConfigs><authConfig id=\"foo\" pluginId=\"cd.go.authentication.passwordfile\"><property><key>PasswordFilePath</key><value>../manual-testing/ant_hg/admins.properties</value></property></authConfig></authConfigs>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(2));
+
+        SecurityAuthConfig existingPasswordFile = migratedConfig.server().security().securityAuthConfigs().first();
+        assertThat(existingPasswordFile.getProperty("PasswordFilePath").getValue(), is("../manual-testing/ant_hg/admins.properties"));
+        assertThat(existingPasswordFile.getId(), is("foo"));
+        assertThat(existingPasswordFile.getPluginId(), is("cd.go.authentication.passwordfile"));
+
+        SecurityAuthConfig ldap = migratedConfig.server().security().securityAuthConfigs().last();
+        assertThat(ldap.getId(), is(not(nullValue())));
+        assertThat(ldap.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(ldap.getProperty("Url").getValue(), is("ldap://ldap.server"));
+        assertThat(ldap.getProperty("ManagerDN").getValue(), is("cn=admin,ou=system,dc=example,dc=com"));
+        assertThat(ldap.getProperty("Password").getValue(), is(password));
+        assertThat(ldap.getProperty("Password").getEncryptedValue(), is(encryptedPassword));
+        assertThat(ldap.getProperty("SearchBases").getValue(), is("ou=system\nou=employee\n"));
+        assertThat(ldap.getProperty("UserLoginFilter").getValue(), is("uid"));
+    }
+
+    @Test
+    public void migrationShouldNotChangeOtherSecurityConfigAsPartOfMigration91() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<ldap uri=\"ldap://ldap.server\" managerDn=\"cn=admin,ou=system,dc=example,dc=com\" encryptedManagerPassword=\"" + encryptedPassword + "\" searchFilter=\"uid\">\n" +
+                "   <bases>\n" +
+                "       <base value=\"ou=system\" />\n" +
+                "       <base value=\"ou=employee\" />\n" +
+                "   </bases>\n" +
+                "</ldap>" +
+                "<roles><role name=\"admin\"/></roles>" +
+                "<admins><user>bob</user></admins>" +
+                "</security></server></cruise>";
+
+        final CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        final SecurityConfig securityConfig = migratedConfig.server().security();
+
+        assertThat(securityConfig.securityAuthConfigs(), hasSize(1));
+
+        SecurityAuthConfig ldap = migratedConfig.server().security().securityAuthConfigs().get(0);
+        assertThat(ldap.getId(), is(not(nullValue())));
+        assertThat(ldap.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(ldap.getProperty("Url").getValue(), is("ldap://ldap.server"));
+        assertThat(ldap.getProperty("ManagerDN").getValue(), is("cn=admin,ou=system,dc=example,dc=com"));
+        assertThat(ldap.getProperty("Password").getValue(), is(password));
+        assertThat(ldap.getProperty("Password").getEncryptedValue(), is(encryptedPassword));
+        assertThat(ldap.getProperty("SearchBases").getValue(), is("ou=system\nou=employee\n"));
+        assertThat(ldap.getProperty("UserLoginFilter").getValue(), is("uid"));
+
+        assertThat(securityConfig.getRoles(), hasItem(new RoleConfig(new CaseInsensitiveString("admin"))));
+        assertThat(securityConfig.adminsConfig(), hasItem(new AdminUser(new CaseInsensitiveString("bob"))));
+    }
+
+    @Test
+    public void shouldNotConflictWithAnExistingLdapPluginConfigAfterMigration91() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<ldap uri=\"ldap://ldap.server.1\" managerDn=\"cn=admin,ou=system,dc=example,dc=com\" encryptedManagerPassword=\"" + encryptedPassword + "\" searchFilter=\"(|(sAMAccountName={0})(mail={0}))\">\n" +
+                "   <bases>\n" +
+                "       <base value=\"ou=system\" />\n" +
+                "       <base value=\"ou=employee\" />\n" +
+                "   </bases>\n" +
+                "</ldap>" +
+                "<authConfigs>" +
+                "<authConfig id=\"ldap\" pluginId=\"cd.go.authentication.ldap\">\n" +
+                "               <property>\n" +
+                "                  <key>Url</key>\n" +
+                "                  <value>ldap://ldap.server.2</value>\n" +
+                "               </property>\n" +
+                "               <property>\n" +
+                "                  <key>ManagerDN</key>\n" +
+                "                  <value>cn=admin,ou=system,dc=example,dc=com</value>\n" +
+                "               </property>\n" +
+                "               <property>\n" +
+                "                  <key>SearchBases</key>\n" +
+                "                  <value>ou=system\n" +
+                "ou=employee</value>\n" +
+                "               </property>\n" +
+                "               <property>\n" +
+                "                  <key>UserLoginFilter</key>\n" +
+                "                  <value>uid</value>\n" +
+                "               </property>\n" +
+                "               <property>\n" +
+                "                  <key>Password</key>\n" +
+                "                  <value>y10CG/z7QBs=</value>\n" +
+                "               </property>\n" +
+                "            </authConfig>\n" +
+                "</authConfigs>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(2));
+
+        SecurityAuthConfig existingLdapPluginProfile = migratedConfig.server().security().securityAuthConfigs().get(0);
+        assertThat(existingLdapPluginProfile.getId(), is("ldap"));
+        assertThat(existingLdapPluginProfile.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(existingLdapPluginProfile.getProperty("Url").getValue(), is("ldap://ldap.server.2"));
+        assertThat(existingLdapPluginProfile.getProperty("ManagerDN").getValue(), is("cn=admin,ou=system,dc=example,dc=com"));
+        assertThat(existingLdapPluginProfile.getProperty("Password").getValue(), is("y10CG/z7QBs="));
+        assertThat(existingLdapPluginProfile.getProperty("SearchBases").getValue(), is("ou=system\nou=employee"));
+        assertThat(existingLdapPluginProfile.getProperty("UserLoginFilter").getValue(), is("uid"));
+
+        SecurityAuthConfig ldapConfigMigratedToAuthConfig = migratedConfig.server().security().securityAuthConfigs().get(1);
+        assertThat(ldapConfigMigratedToAuthConfig.getId(), is(not(nullValue())));
+        assertThat(ldapConfigMigratedToAuthConfig.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Url").getValue(), is("ldap://ldap.server.1"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("ManagerDN").getValue(), is("cn=admin,ou=system,dc=example,dc=com"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Password").getValue(), is(password));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Password").getEncryptedValue(), is(encryptedPassword));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("SearchBases").getValue(), is("ou=system\nou=employee\n"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("UserLoginFilter").getValue(), is("(|(sAMAccountName={0})(mail={0}))"));
+    }
+
+    @Test
+    public void shouldMigrateLdapManagerPasswordWithNewlineAndSpaces_XslMigrationFrom88To91() throws Exception {
+        int fromVersion = 88;
+        String encryptedValueWithWhitespaceAndNewline = new StringBuilder(encryptedPassword).insert(2, "\r\n" +
+                "                        ").toString();
+
+        String content = ConfigFileFixture.config(
+                "<server artifactsdir='artifacts'>\n" +
+                        "<security>\n" +
+                        "      <ldap uri='url' managerDn='manager-dn' encryptedManagerPassword='"+encryptedValueWithWhitespaceAndNewline+"'>\n" +
+                        "        <bases>\n" +
+                        "          <base value='base' />\n" +
+                        "        </bases>\n" +
+                        "      </ldap>\n" +
+                        "    </security>" +
+                        "  </server>", fromVersion);
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(content, fromVersion);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+
+        SecurityAuthConfig ldapConfigMigratedToAuthConfig = migratedConfig.server().security().securityAuthConfigs().get(0);
+        assertThat(ldapConfigMigratedToAuthConfig.getId(), is(not(nullValue())));
+        assertThat(ldapConfigMigratedToAuthConfig.getPluginId(), is("cd.go.authentication.ldap"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Url").getValue(), is("url"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("ManagerDN").getValue(), is("manager-dn"));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Password").getValue(), is(password));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("Password").getEncryptedValue(), is(encryptedPassword));
+        assertThat(ldapConfigMigratedToAuthConfig.getProperty("SearchBases").getValue(), is("base\n"));
+    }
+
+    @Test
+    public void shouldMigrateInbuiltPasswordFileToAuthConfigAsPartOfMigration92() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server><security>" +
+                "<passwordFile path=\"../path/to/password_file.properties\" />"+
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 91);
+        assertThat(migratedConfig.server().security().passwordFileConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(1));
+
+        SecurityAuthConfig passwordFileAuthConfig = migratedConfig.server().security().securityAuthConfigs().get(0);
+        assertThat(passwordFileAuthConfig.getId(), is(not(nullValue())));
+        assertThat(passwordFileAuthConfig.getPluginId(), is("cd.go.authentication.passwordfile"));
+        assertThat(passwordFileAuthConfig.getProperty("PasswordFilePath").getValue(), is("../path/to/password_file.properties"));
+    }
+
+    @Test
+    public void shouldKeepExistingAuthConfigsWhileMigratingPasswordFileAsPartOfMigration92() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server><security>" +
+                "<passwordFile path=\"../path/to/password_file.properties\" />"+
+                "<authConfigs><authConfig id=\"foo\" pluginId=\"cd.go.authentication.passwordfile\"><property><key>PasswordFilePath</key><value>../manual-testing/ant_hg/admins.properties</value></property></authConfig></authConfigs>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().passwordFileConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(2));
+
+        SecurityAuthConfig existingPasswordFile = migratedConfig.server().security().securityAuthConfigs().first();
+        assertThat(existingPasswordFile.getProperty("PasswordFilePath").getValue(), is("../manual-testing/ant_hg/admins.properties"));
+        assertThat(existingPasswordFile.getId(), is("foo"));
+        assertThat(existingPasswordFile.getPluginId(), is("cd.go.authentication.passwordfile"));
+
+        SecurityAuthConfig migratedPasswordFileAuthConfig = migratedConfig.server().security().securityAuthConfigs().last();
+        assertThat(migratedPasswordFileAuthConfig.getId(), is(not(nullValue())));
+        assertThat(migratedPasswordFileAuthConfig.getPluginId(), is("cd.go.authentication.passwordfile"));
+        assertThat(migratedPasswordFileAuthConfig.getProperty("PasswordFilePath").getValue(), is("../path/to/password_file.properties"));
+    }
+
+    @Test
+    public void shouldNotChangeOtherSecurityConfigAsPartOfMigration92() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<passwordFile path=\"../path/to/password_file.properties\" />"+
+                "<roles><role name=\"admin\"/></roles>" +
+                "<admins><user>bob</user></admins>" +
+                "</security></server></cruise>";
+
+        final CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().passwordFileConfig().isEnabled(), is(false));
+        final SecurityConfig securityConfig = migratedConfig.server().security();
+
+        assertThat(securityConfig.securityAuthConfigs(), hasSize(1));
+
+        SecurityAuthConfig migratedPasswordFileAuthConfig = migratedConfig.server().security().securityAuthConfigs().first();
+        assertThat(migratedPasswordFileAuthConfig.getId(), is(not(nullValue())));
+        assertThat(migratedPasswordFileAuthConfig.getPluginId(), is("cd.go.authentication.passwordfile"));
+        assertThat(migratedPasswordFileAuthConfig.getProperty("PasswordFilePath").getValue(), is("../path/to/password_file.properties"));
+
+        assertThat(securityConfig.getRoles(), hasItem(new RoleConfig(new CaseInsensitiveString("admin"))));
+        assertThat(securityConfig.adminsConfig(), hasItem(new AdminUser(new CaseInsensitiveString("bob"))));
+    }
+
+    @Test
+    public void shouldNotConflictWithAnExistingPasswordFilePluginConfigAfterMigration92() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server serverId='dev-id'><security>" +
+                "<passwordFile path=\"../path/to/password_file.properties\" />"+
+                "<authConfigs>" +
+                "<authConfig id=\"passwordFile\" pluginId=\"cd.go.authentication.passwordfile\">" +
+                "<property><key>PasswordFilePath</key><value>../manual-testing/ant_hg/admins.properties</value></property>" +
+                "</authConfig>" +
+                "</authConfigs>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(2));
+
+        SecurityAuthConfig existingPasswordFile = migratedConfig.server().security().securityAuthConfigs().first();
+        assertThat(existingPasswordFile.getProperty("PasswordFilePath").getValue(), is("../manual-testing/ant_hg/admins.properties"));
+        assertThat(existingPasswordFile.getId(), is("passwordFile"));
+        assertThat(existingPasswordFile.getPluginId(), is("cd.go.authentication.passwordfile"));
+
+        SecurityAuthConfig migratedPasswordFileAuthConfig = migratedConfig.server().security().securityAuthConfigs().last();
+        assertThat(migratedPasswordFileAuthConfig.getId(), is(not(nullValue())));
+        assertThat(migratedPasswordFileAuthConfig.getPluginId(), is("cd.go.authentication.passwordfile"));
+        assertThat(migratedPasswordFileAuthConfig.getProperty("PasswordFilePath").getValue(), is("../path/to/password_file.properties"));
+    }
+
+    @Test
+    public void shouldGenerateUniqueNamesForBothLdapAndPasswordFileAuthConfigDuringMigration() throws Exception {
+        String configXml = "<cruise schemaVersion='90'><server><security>" +
+                "<passwordFile path=\"../path/to/password_file.properties\" />"+
+                "<ldap uri=\"ldap://ldap.server.1\" managerDn=\"cn=admin,ou=system,dc=example,dc=com\" encryptedManagerPassword=\"" + encryptedPassword + "\" searchFilter=\"(|(sAMAccountName={0})(mail={0}))\">\n" +
+                "   <bases>\n" +
+                "       <base value=\"ou=system\" />\n" +
+                "       <base value=\"ou=employee\" />\n" +
+                "   </bases>\n" +
+                "</ldap>" +
+                "</security></server></cruise>";
+
+        CruiseConfig migratedConfig = migrateConfigAndLoadTheNewConfig(configXml, 90);
+        assertThat(migratedConfig.server().security().passwordFileConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().ldapConfig().isEnabled(), is(false));
+        assertThat(migratedConfig.server().security().securityAuthConfigs(), hasSize(2));
+
+        SecurityAuthConfig passwordFileAuthConfig = migratedConfig.server().security().securityAuthConfigs().get(0);
+        SecurityAuthConfig ldapAuthConfig = migratedConfig.server().security().securityAuthConfigs().get(1);
+        assertThat(passwordFileAuthConfig.getId(), is(not(ldapAuthConfig.getId())));
+    }
+
     private void assertStringsIgnoringCarriageReturnAreEqual(String expected, String actual) {
         assertEquals(expected.replaceAll("\\r", ""), actual.replaceAll("\\r", ""));
     }
@@ -1498,7 +1812,7 @@ public class GoConfigMigrationIntegrationTest {
         String migratedContent = migrateXmlString(content, fromVersion);
         GoConfigService.XmlPartialSaver fileSaver = goConfigService.fileSaver(true);
         GoConfigValidity configValidity = fileSaver.saveXml(migratedContent, goConfigService.configFileMd5());
-        assertThat(configValidity.isValid(), is(true));
+        assertThat(configValidity.errorMessage(), configValidity.isValid(), is(true));
         return goConfigService.getCurrentConfig();
     }
 
@@ -1514,7 +1828,7 @@ public class GoConfigMigrationIntegrationTest {
                         e.printStackTrace();
                         exs.add(e);
                     }
-                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins()
+                }, configRepository, new TimeProvider(), configCache, ConfigElementImplementationRegistryMother.withNoPlugins(), new SystemEnvironment()
         );
         Method upgrade = upgrader.getClass().getDeclaredMethod("upgrade", String.class, Integer.TYPE, Integer.TYPE);
         upgrade.setAccessible(true);
@@ -1536,7 +1850,7 @@ public class GoConfigMigrationIntegrationTest {
                 }
                 throw bomb(e.getMessage() + ": content=\n" + content, e);
             }
-        }, configRepository, new TimeProvider(), configCache, registry
+        }, configRepository, new TimeProvider(), configCache, registry, new SystemEnvironment()
         );
         SystemEnvironment sysEnv = new SystemEnvironment();
         FullConfigSaveNormalFlow normalFlow = new FullConfigSaveNormalFlow(configCache, registry, sysEnv, serverVersion, new TimeProvider(), configRepository, cachedGoPartials);

@@ -56,8 +56,6 @@ import static org.junit.Assert.*;
 public class EnvironmentConfigServiceIntegrationTest {
 
     @Autowired
-    private SecurityService securityService;
-    @Autowired
     private GoConfigDao goConfigDao;
     @Autowired
     private GoConfigService goConfigService;
@@ -69,8 +67,6 @@ public class EnvironmentConfigServiceIntegrationTest {
     private EnvironmentConfigService service;
     @Autowired
     private Localizer localizer;
-    @Autowired
-    private AgentService agentService;
 
     private GoConfigFileHelper configHelper = new GoConfigFileHelper();
 
@@ -90,7 +86,7 @@ public class EnvironmentConfigServiceIntegrationTest {
 
     @Test
     public void shouldReturnTheCorrectLocalizedMessageForNoPermission() throws IOException {
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("super_hero");
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         service.createEnvironment(env("foo-env", new ArrayList<String>(), new ArrayList<Map<String, String>>(), new ArrayList<String>()), new Username(new CaseInsensitiveString("evil_hacker")), result);
@@ -169,7 +165,7 @@ public class EnvironmentConfigServiceIntegrationTest {
     @Test
     public void shouldReturnTheCorrectLocalizedMessageWhenUserDoesNotHavePermissionToUpdate_ForNewUpdateEnvironmentMethod() throws Exception {
         configHelper.addEnvironments("foo");
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("super_hero");
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
 
@@ -185,7 +181,7 @@ public class EnvironmentConfigServiceIntegrationTest {
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         String md5 = entityHashingService.md5ForEntity(service.getEnvironmentConfig("bar-env"));
         service.updateEnvironment("bar-env", env("foo-env", new ArrayList<String>(), new ArrayList<Map<String, String>>(), new ArrayList<String>()), new Username(new CaseInsensitiveString("any")), md5, result);
-        assertThat(result.message(localizer), is("Failed to update environment 'bar-env'. failed to save : Duplicate unique value [foo-env] declared for identity constraint \"uniqueEnvironmentName\" of element \"environments\"."));
+        assertThat(result.message(localizer), is("Failed to update environment 'bar-env'. failed to save : Duplicate unique value [foo-env] declared for identity constraint of element \"environments\"."));
     }
 
     @Test
@@ -223,7 +219,7 @@ public class EnvironmentConfigServiceIntegrationTest {
     @Test
     public void shouldReturnTheCorrectLocalizedMessageWhenUserDoesNotHavePermissionToDelete() throws IOException, NoSuchEnvironmentException {
         configHelper.addEnvironments("foo");
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("super_hero");
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         service.deleteEnvironment(service.getEnvironmentConfig("foo"), new Username(new CaseInsensitiveString("evil_hacker")), result);
@@ -260,7 +256,7 @@ public class EnvironmentConfigServiceIntegrationTest {
     @Test
     public void shouldReturnTheCorrectLocalizedMessageWhenUserDoesNotHavePermissionToPatch() throws IOException, NoSuchEnvironmentException {
         configHelper.addEnvironments("foo");
-        configHelper.turnOnSecurity();
+        configHelper.enableSecurity();
         configHelper.addAdmins("super_hero");
         HttpLocalizedOperationResult result = new HttpLocalizedOperationResult();
         service.patchEnvironment(service.getEnvironmentConfig("foo"), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new Username(new CaseInsensitiveString("evil_hacker")), result);

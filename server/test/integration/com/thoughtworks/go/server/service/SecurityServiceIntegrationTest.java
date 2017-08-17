@@ -56,7 +56,6 @@ public class SecurityServiceIntegrationTest {
     @Autowired private GoConfigDao goConfigDao;
     @Autowired private CachedGoConfig cachedGoConfig;
     @Autowired private SecurityService securityService;
-    @Autowired private GoConfigService configService;
     @Autowired private DatabaseAccessHelper dbHelper;
     private GoConfigFileHelper configHelper;
 
@@ -318,8 +317,8 @@ public class SecurityServiceIntegrationTest {
     public void shouldReturnTrueIfUserIsTemplateAdminAndCanEditTemplate() {
         String templateAdmin = "template-admin-1";
         Authorization authorization = new Authorization(new AdminsConfig(new AdminUser(new CaseInsensitiveString(templateAdmin))));
-        String templateName = "pipeline-name";
-        configHelper.addTemplate(templateName, authorization, "stage-name");
+        CaseInsensitiveString templateName = new CaseInsensitiveString("pipeline-name");
+        configHelper.addTemplate("pipeline-name", authorization, "stage-name");
 
         boolean isAuthorized = securityService.isAuthorizedToEditTemplate(templateName, new Username(new CaseInsensitiveString(templateAdmin)));
 
@@ -331,8 +330,8 @@ public class SecurityServiceIntegrationTest {
         String templateAdmin = "template-admin-1";
         String templateAdminNotForThisTemplate = "template-admin-2";
         Authorization authorization = new Authorization(new AdminsConfig(new AdminUser(new CaseInsensitiveString(templateAdmin))));
-        String templateName = "pipeline-name";
-        configHelper.addTemplate(templateName, authorization, "stage-name");
+        CaseInsensitiveString templateName = new CaseInsensitiveString("pipeline-name");
+        configHelper.addTemplate("pipeline-name", authorization, "stage-name");
 
         boolean isAuthorized = securityService.isAuthorizedToEditTemplate(templateName, new Username(new CaseInsensitiveString(templateAdminNotForThisTemplate)));
 

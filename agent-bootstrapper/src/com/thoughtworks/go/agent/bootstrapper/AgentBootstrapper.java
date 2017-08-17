@@ -27,11 +27,13 @@ import com.thoughtworks.go.util.SystemUtil;
 import com.thoughtworks.go.util.validators.FileValidator;
 import com.thoughtworks.go.util.validators.Validation;
 import org.apache.commons.io.FileUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.log4j.NDC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+
+import static com.thoughtworks.go.utils.AssertJava8.assertVMVersion;
 
 public class AgentBootstrapper {
 
@@ -40,7 +42,7 @@ public class AgentBootstrapper {
     public static final String DEFAULT_LOG4J_CONFIGURATION_FILE = "agent-bootstrapper-log4j.properties";
 
     int waitTimeBeforeRelaunch = SystemUtil.getIntProperty(WAIT_TIME_BEFORE_RELAUNCH_IN_MS, DEFAULT_WAIT_TIME_BEFORE_RELAUNCH_IN_MS);
-    private static final Log LOG = LogFactory.getLog(AgentBootstrapper.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AgentBootstrapper.class);
 
     private boolean loop;
 
@@ -56,6 +58,7 @@ public class AgentBootstrapper {
     }
 
     public static void main(String[] argv) {
+        assertVMVersion();
         AgentBootstrapperArgs args = new AgentCLI().parse(argv);
         LogConfigurator logConfigurator = new LogConfigurator(DEFAULT_LOG4J_CONFIGURATION_FILE);
         logConfigurator.initialize();
@@ -80,7 +83,7 @@ public class AgentBootstrapper {
                 setContextClassLoader(launcher.getClass().getClassLoader());
                 returnValue = launcher.launch(descriptor);
                 resetContextClassLoader(tccl);
-                LOG.info("Launcher returned with code " + returnValue + "(0x" + Integer.toHexString(returnValue).toUpperCase() + ")");
+                LOG.info("Launcher returned with code {}(0x{})", returnValue, Integer.toHexString(returnValue).toUpperCase());
                 if (returnValue == AgentLauncher.IRRECOVERABLE_ERROR) {
                     loop = false;
                 }
@@ -108,7 +111,7 @@ public class AgentBootstrapper {
     }
 
     void waitForRelaunchTime() {
-        LOG.info(String.format("Waiting for %s ms before re-launch....", waitTimeBeforeRelaunch));
+        LOG.info("Waiting for {} ms before re-launch....", waitTimeBeforeRelaunch);
         try {
             Thread.sleep(waitTimeBeforeRelaunch);
         } catch (InterruptedException e) {

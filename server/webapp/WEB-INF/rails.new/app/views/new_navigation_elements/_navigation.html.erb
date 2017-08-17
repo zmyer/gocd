@@ -13,13 +13,13 @@
           <% unless can_view_admin_page? -%>
               <span>Admin</span>
           <% else -%>
-              <a href="#">Admin</a>
+              <a href="#" onclick="return false;">Admin</a>
               <ul class="menu vertical admin-dropdown">
                 <%- if is_user_an_admin? -%>
-                    <%= render partial: 'navigation_elements/dropdown_admin' -%>
+                    <%= render partial: 'new_navigation_elements/dropdown_admin' -%>
                 <%- elsif is_user_a_group_admin? -%>
-                    <%= render partial: 'navigation_elements/dropdown_pipeline_group_admin' -%>
-                <%- elsif is_user_a_template_admin? -%>
+                    <%= render partial: 'new_navigation_elements/dropdown_pipeline_group_admin' -%>
+                <%- elsif is_user_authorized_to_view_templates? -%>
                     <li role="presentation">
                       <%= link_to 'Templates', templates_path -%>
                     </li>
@@ -33,12 +33,12 @@
   <div class="medium-6 columns">
     <div class="top-bar-right">
       <ul class="dropdown menu current-user nav-right" data-dropdown-menu>
-        <li><%= link_to(l.string('HELP_SMALL'), 'https://gocd.io/help', :target => '_blank') %></li>
+        <li><%= link_to(l.string('HELP_SMALL'), 'https://gocd.org/help', :target => '_blank') %></li>
         <% unless @user.anonymous? %>
             <li class="current-user">
-              <a href="#"><i class="user"></i><%= @user.display_name %></a>
+              <a href="#" onclick="return false;"><i class="user"></i><%= @user.display_name %></a>
               <ul class="menu vertical">
-                <li><%= link_to 'Preferences', url_for_path('/tab/mycruise/user') %></li>
+                <li><%= link_to 'Preferences', preferences_notifications_path %></li>
                 <li><%= link_to 'Sign out', url_for_path('auth/logout') %></li>
               </ul>
             </li>
@@ -49,7 +49,7 @@
             <span class="bell"></span>
             <div class="hover-container">
               <div class="hover">
-                <span>A new release of GoCD - <a href="https://www.gocd.io/download/" target="_blank"><%= go_update %></a> is available.</span>
+                <span>A new release of GoCD - <a href="https://www.gocd.org/download/" target="_blank"><%= go_update %></a> is available.</span>
               </div>
             </div>
           </div>

@@ -62,7 +62,7 @@
         Click on a stage in the configuration panel to view activity only within that stage.
         You can also manually approve stages from this screen to force the next stage to run.
         <a class="more" target="_blank" title="Learn more from help documentation"
-           href="https://docs.gocd.io/current/navigation/pipeline_activity_page.html">more...</a>
+           href="https://docs.gocd.org/current/navigation/pipeline_activity_page.html">more...</a>
       </p>
         #parse("shared/_page_intro_bottom.vm")
       <!-- pipeline start -->
@@ -100,9 +100,26 @@
   var stageActions = new StageActions();
   var paginator = new Paginator();
 
+  var ReformatAllBuildTimes = Class.create();
+  ReformatAllBuildTimes.prototype = {
+    initialize: function () {
+    },
+    notify: function () {
+      jQuery(".pipeline-info.scheduled-date").map(function (idx, scheduledDate) {
+        var timestamp = parseInt(jQuery(scheduledDate).attr("data"));
+        if (isNaN(timestamp)) return;
+        var time = new Date(timestamp);
+        jQuery(scheduledDate).text(moment(time).format('DD MMM YYYY [at] HH:mm:ss [Local Time]'));
+      });
+    }
+  }
+
+  new ReformatAllBuildTimes().notify();
+
   var dashboard_periodical_executor = new DashboardPeriodicalExecutor('pipelineHistory.json?pipelineName=$pipelineName');
   var pipelineHistoryObserver = new PipelineHistoryObserver('history');
   dashboard_periodical_executor.register(pipelineHistoryObserver);
+  dashboard_periodical_executor.register(new ReformatAllBuildTimes());
 
   dashboard_periodical_executor.start();
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ThoughtWorks, Inc.
+ * Copyright 2017 ThoughtWorks, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import com.thoughtworks.go.listener.AgentChangeListener;
 import com.thoughtworks.go.presentation.TriStateSelection;
 import com.thoughtworks.go.remote.AgentIdentifier;
 import com.thoughtworks.go.security.Registration;
+import com.thoughtworks.go.server.domain.Agent;
 import com.thoughtworks.go.server.domain.AgentInstances;
 import com.thoughtworks.go.server.domain.ElasticAgentMetadata;
 import com.thoughtworks.go.server.domain.Username;
@@ -41,7 +42,8 @@ import com.thoughtworks.go.serverhealth.ServerHealthState;
 import com.thoughtworks.go.util.SystemEnvironment;
 import com.thoughtworks.go.util.TriState;
 import com.thoughtworks.go.utils.Timeout;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -58,20 +60,19 @@ public class AgentService {
     private final AgentConfigService agentConfigService;
     private final SecurityService securityService;
     private final EnvironmentConfigService environmentConfigService;
-    private final GoConfigService goConfigService;
     private final UuidGenerator uuidGenerator;
     private final ServerHealthService serverHealthService;
     private final AgentDao agentDao;
 
     private AgentInstances agentInstances;
 
-    private static final Logger LOGGER = Logger.getLogger(AgentService.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(AgentService.class);
 
     @Autowired
     public AgentService(AgentConfigService agentConfigService, SystemEnvironment systemEnvironment, final EnvironmentConfigService environmentConfigService,
-                        final GoConfigService goConfigService, SecurityService securityService, AgentDao agentDao, UuidGenerator uuidGenerator, ServerHealthService serverHealthService,
+                        SecurityService securityService, AgentDao agentDao, UuidGenerator uuidGenerator, ServerHealthService serverHealthService,
                         final EmailSender emailSender) {
-        this(agentConfigService, systemEnvironment, null, environmentConfigService, goConfigService, securityService, agentDao, uuidGenerator, serverHealthService);
+        this(agentConfigService, systemEnvironment, null, environmentConfigService, securityService, agentDao, uuidGenerator, serverHealthService);
         this.agentInstances = new AgentInstances(new AgentRuntimeStatus.ChangeListener() {
             public void statusUpdateRequested(AgentRuntimeInfo runtimeInfo, AgentRuntimeStatus newStatus) {
             }
@@ -79,12 +80,11 @@ public class AgentService {
     }
 
     AgentService(AgentConfigService agentConfigService, SystemEnvironment systemEnvironment, AgentInstances agentInstances,
-                 EnvironmentConfigService environmentConfigService, GoConfigService goConfigService, SecurityService securityService, AgentDao agentDao, UuidGenerator uuidGenerator,
+                 EnvironmentConfigService environmentConfigService, SecurityService securityService, AgentDao agentDao, UuidGenerator uuidGenerator,
                  ServerHealthService serverHealthService) {
         this.systemEnvironment = systemEnvironment;
         this.agentConfigService = agentConfigService;
         this.environmentConfigService = environmentConfigService;
-        this.goConfigService = goConfigService;
         this.securityService = securityService;
         this.agentInstances = agentInstances;
         this.agentDao = agentDao;
@@ -287,24 +287,22 @@ public class AgentService {
 
     public void updateRuntimeInfo(AgentRuntimeInfo info) {
         if (!info.hasCookie()) {
-            LOGGER.warn(format("Agent [%s] has no cookie set", info.agentInfoDebugString()));
+            LOGGER.warn("Agent [{}] has no cookie set", info.agentInfoDebugString());
             throw new AgentNoCookieSetException(format("Agent [%s] has no cookie set", info.agentInfoDebugString()));
         }
         if (info.hasDuplicateCookie(agentDao.cookieFor(info.getIdentifier()))) {
-            LOGGER.warn(format("Found agent [%s] with duplicate uuid. Please check the agent installation.", info.agentInfoDebugString()));
+            LOGGER.warn("Found agent [{}] with duplicate uuid. Please check the agent installation.", info.agentInfoDebugString());
             serverHealthService.update(
                     ServerHealthState.warning(format("[%s] has duplicate unique identifier which conflicts with [%s]", info.agentInfoForDisplay(), findAgentAndRefreshStatus(info.getUUId()).agentInfoForDisplay()),
-                            "Please check the agent installation. Click <a href='https://docs.gocd.io/current/faq/agent_guid_issue.html' target='_blank'>here</a> for more info.",
+                            "Please check the agent installation. Click <a href='https://docs.gocd.org/current/faq/agent_guid_issue.html' target='_blank'>here</a> for more info.",
                             HealthStateType.duplicateAgent(HealthStateScope.forAgent(info.getCookie())), Timeout.THIRTY_SECONDS));
             throw new AgentWithDuplicateUUIDException(format("Agent [%s] has invalid cookie", info.agentInfoDebugString()));
         }
         AgentInstance agentInstance = findAgentAndRefreshStatus(info.getUUId());
         if (agentInstance.isIpChangeRequired(info.getIpAdress())) {
             AgentConfig agentConfig = agentInstance.agentConfig();
-            LOGGER.warn(
-                    String.format("Agent with UUID [%s] changed IP Address from [%s] to [%s]",
-                            info.getUUId(), agentConfig.getIpAddress(), info.getIpAdress()));
-            Username userName = agentUsername(info.getUUId(), info.getIpAdress(), agentConfig.getHostNameForDispaly());
+            Username userName = agentUsername(info.getUUId(), info.getIpAdress(), agentConfig.getHostNameForDisplay());
+            LOGGER.warn("Agent with UUID [{}] changed IP Address from [{}] to [{}]", info.getUUId(), agentConfig.getIpAddress(), info.getIpAdress());
             agentConfigService.updateAgentIpByUuid(agentConfig.getUuid(), info.getIpAdress(), userName);
         }
         agentInstances.updateAgentRuntimeInfo(info);
@@ -315,16 +313,12 @@ public class AgentService {
     }
 
     public Registration requestRegistration(Username username, AgentRuntimeInfo agentRuntimeInfo) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Agent is requesting registration " + agentRuntimeInfo);
-        }
+        LOGGER.debug("Agent is requesting registration {}", agentRuntimeInfo);
         AgentInstance agentInstance = agentInstances.register(agentRuntimeInfo);
         Registration registration = agentInstance.assignCertification();
         if (agentInstance.isRegistered()) {
             agentConfigService.saveOrUpdateAgent(agentInstance, username);
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("New Agent approved " + agentRuntimeInfo);
-            }
+            LOGGER.debug("New Agent approved {}", agentRuntimeInfo);
         }
         return registration;
     }
@@ -366,6 +360,17 @@ public class AgentService {
         String cookie = uuidGenerator.randomUuid();
         agentDao.associateCookie(identifier, cookie);
         return cookie;
+    }
+
+    public Agent findAgentObjectByUuid(String uuid) {
+        Agent agent;
+        AgentConfig agentFromConfig = agentConfigService.agents().getAgentByUuid(uuid);
+        if (agentFromConfig != null && !agentFromConfig.isNull()) {
+            agent = Agent.fromConfig(agentFromConfig);
+        } else {
+            agent = agentDao.agentByUuid(uuid);
+        }
+        return agent;
     }
 
     public AgentsViewModel filter(List<String> uuids) {

@@ -134,7 +134,8 @@ public class ConfigConverter {
 
     private void setCommonTaskMembers(AbstractTask task, CRTask crTask) {
         CRTask crTaskOnCancel = crTask.getOnCancel();
-        task.setCancelTask(crTaskOnCancel != null ? toAbstractTask(crTaskOnCancel) : null);
+        if(crTaskOnCancel != null)
+            task.setCancelTask(toAbstractTask(crTaskOnCancel));
         task.runIfConfigs = toRunIfConfigs(crTask.getRunIf());
     }
 
@@ -314,7 +315,7 @@ public class ConfigConverter {
             ((PluggableSCMMaterialConfig)repoMaterial).setFolder(destination);
         }
         else
-            LOGGER.warn("Unknown material type " + repoMaterial.getTypeForDisplay());
+            LOGGER.warn("Unknown material type {}", repoMaterial.getTypeForDisplay());
     }
 
     public PackageMaterialConfig toPackageMaterial(CRPackageMaterial crPackageMaterial) {

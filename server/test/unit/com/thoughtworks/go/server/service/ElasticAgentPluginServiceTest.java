@@ -19,13 +19,12 @@ package com.thoughtworks.go.server.service;
 import com.thoughtworks.go.config.ArtifactPlans;
 import com.thoughtworks.go.config.EnvironmentVariablesConfig;
 import com.thoughtworks.go.config.elastic.ElasticProfile;
-import com.thoughtworks.go.domain.DefaultJobPlan;
-import com.thoughtworks.go.domain.JobIdentifier;
-import com.thoughtworks.go.domain.JobPlan;
+import com.thoughtworks.go.domain.*;
 import com.thoughtworks.go.plugin.access.elastic.ElasticAgentPluginRegistry;
 import com.thoughtworks.go.plugin.api.info.PluginDescriptor;
 import com.thoughtworks.go.plugin.infra.PluginManager;
 import com.thoughtworks.go.plugin.infra.plugininfo.GoPluginDescriptor;
+import com.thoughtworks.go.server.domain.ElasticAgentMetadata;
 import com.thoughtworks.go.server.messaging.elasticagents.CreateAgentMessage;
 import com.thoughtworks.go.server.messaging.elasticagents.CreateAgentQueueHandler;
 import com.thoughtworks.go.server.messaging.elasticagents.ServerPingMessage;
@@ -44,6 +43,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -94,7 +94,8 @@ public class ElasticAgentPluginServiceTest {
         service.heartbeat();
 
         ArgumentCaptor<ServerPingMessage> captor = ArgumentCaptor.forClass(ServerPingMessage.class);
-        verify(serverPingQueue, times(3)).post(captor.capture());
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+        verify(serverPingQueue, times(3)).post(captor.capture(), ttl.capture());
         List<ServerPingMessage> messages = captor.getAllValues();
         assertThat(messages.contains(new ServerPingMessage("p1")), is(true));
         assertThat(messages.contains(new ServerPingMessage("p2")), is(true));
@@ -102,17 +103,32 @@ public class ElasticAgentPluginServiceTest {
     }
 
     @Test
+    public void shouldSendServerHeartBeatMessageWithTimeToLive() throws Exception {
+        service.setElasticPluginHeartBeatInterval(60000L);
+        ArgumentCaptor<ServerPingMessage> captor = ArgumentCaptor.forClass(ServerPingMessage.class);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+
+        service.heartbeat();
+
+        verify(serverPingQueue, times(3)).post(captor.capture(), ttl.capture());
+
+        assertThat(ttl.getValue(), is(50000L));
+    }
+
+    @Test
     public void shouldCreateAgentForNewlyAddedJobPlansOnly() {
+        when(serverConfigService.elasticJobStarvationThreshold()).thenReturn(10000L);
         when(serverConfigService.hasAutoregisterKey()).thenReturn(true);
         JobPlan plan1 = plan(1, "docker");
         JobPlan plan2 = plan(2, "docker");
         ArgumentCaptor<ServerHealthState> captorForHealthState = ArgumentCaptor.forClass(ServerHealthState.class);
-        ArgumentCaptor<CreateAgentMessage> captor = ArgumentCaptor.forClass(CreateAgentMessage.class);
+        ArgumentCaptor<CreateAgentMessage> createAgentMessageArgumentCaptor = ArgumentCaptor.forClass(CreateAgentMessage.class);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
         when(environmentConfigService.envForPipeline("pipeline-2")).thenReturn("env-2");
         service.createAgentsFor(Arrays.asList(plan1), Arrays.asList(plan1, plan2));
 
-        verify(createAgentQueue).post(captor.capture());
-        CreateAgentMessage createAgentMessage = captor.getValue();
+        verify(createAgentQueue).post(createAgentMessageArgumentCaptor.capture(), ttl.capture());
+        CreateAgentMessage createAgentMessage = createAgentMessageArgumentCaptor.getValue();
         assertThat(createAgentMessage.autoregisterKey(), is(autoRegisterKey));
         assertThat(createAgentMessage.pluginId(), is(plan2.getElasticProfile().getPluginId()));
         assertThat(createAgentMessage.configuration(), is(plan2.getElasticProfile().getConfigurationAsMap(true)));
@@ -120,14 +136,31 @@ public class ElasticAgentPluginServiceTest {
     }
 
     @Test
+    public void shouldPostCreateAgentMessageWithTimeToLiveLesserThanJobStarvationThreshold() throws Exception {
+        when(serverConfigService.elasticJobStarvationThreshold()).thenReturn(20000L);
+        when(serverConfigService.hasAutoregisterKey()).thenReturn(true);
+        JobPlan plan1 = plan(1, "docker");
+        JobPlan plan2 = plan(2, "docker");
+
+        ArgumentCaptor<CreateAgentMessage> createAgentMessageArgumentCaptor = ArgumentCaptor.forClass(CreateAgentMessage.class);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
+        when(environmentConfigService.envForPipeline("pipeline-2")).thenReturn("env-2");
+        service.createAgentsFor(Arrays.asList(plan1), Arrays.asList(plan1, plan2));
+
+        verify(createAgentQueue).post(createAgentMessageArgumentCaptor.capture(), ttl.capture());
+        assertThat(ttl.getValue(), is(10000L));
+    }
+
+    @Test
     public void shouldRetryCreateAgentForJobThatHasBeenWaitingForAnAgentForALongTime() {
         when(serverConfigService.elasticJobStarvationThreshold()).thenReturn(0L);
         JobPlan plan1 = plan(1, "docker");
         ArgumentCaptor<CreateAgentMessage> captor = ArgumentCaptor.forClass(CreateAgentMessage.class);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
         service.createAgentsFor(new ArrayList<>(), Arrays.asList(plan1));
         service.createAgentsFor(Arrays.asList(plan1), Arrays.asList(plan1));//invoke create again
 
-        verify(createAgentQueue, times(2)).post(captor.capture());
+        verify(createAgentQueue, times(2)).post(captor.capture(), ttl.capture());
         CreateAgentMessage createAgentMessage = captor.getValue();
         assertThat(createAgentMessage.autoregisterKey(), is(autoRegisterKey));
         assertThat(createAgentMessage.pluginId(), is(plan1.getElasticProfile().getPluginId()));
@@ -153,10 +186,11 @@ public class ElasticAgentPluginServiceTest {
     public void shouldRemoveExistingMissingPluginErrorFromAPreviousAttemptIfThePluginIsNowRegistered(){
         JobPlan plan1 = plan(1, "docker");
         ArgumentCaptor<HealthStateScope> captor = ArgumentCaptor.forClass(HealthStateScope.class);
+        ArgumentCaptor<Long> ttl = ArgumentCaptor.forClass(Long.class);
 
         service.createAgentsFor(new ArrayList<>(), Arrays.asList(plan1));
 
-        verify(createAgentQueue, times(1)).post(any());
+        verify(createAgentQueue, times(1)).post(any(), ttl.capture());
         verify(serverHealthService).removeByScope(captor.capture());
         HealthStateScope healthStateScope = captor.getValue();
         assertThat(healthStateScope.getScope(), is("pipeline-1/stage/job"));
@@ -177,6 +211,38 @@ public class ElasticAgentPluginServiceTest {
             assertThat(serverHealthState.getType().getScope().isForJob(), is(true));
             assertThat(serverHealthState.getType().getScope().getScope(), is("pipeline-1/stage/job"));
         }
+    }
+
+    @Test
+    public void shouldAssignJobToAnAgentIfThePluginMatchesForTheAgentAndJob_AndThePluginAgreesToTheAssignment(){
+        String uuid = UUID.randomUUID().toString();
+        String elasticPluginId = "plugin-1";
+        ElasticAgentMetadata agentMetadata = new ElasticAgentMetadata(uuid, uuid, elasticPluginId, AgentRuntimeStatus.Idle, AgentConfigStatus.Enabled);
+        ElasticProfile elasticProfile = new ElasticProfile("1", elasticPluginId);
+
+        when(registry.shouldAssignWork(any(), any(), any(), any())).thenReturn(true);
+        assertThat(service.shouldAssignWork(agentMetadata, null, elasticProfile), is(true));
+    }
+
+    @Test
+    public void shouldNotAssignJobToAnAgentIfThePluginMatchesForTheAgentAndJob_ButThePluginRefusesToTheAssignment(){
+        String uuid = UUID.randomUUID().toString();
+        String elasticPluginId = "plugin-1";
+        ElasticAgentMetadata agentMetadata = new ElasticAgentMetadata(uuid, uuid, elasticPluginId, AgentRuntimeStatus.Idle, AgentConfigStatus.Enabled);
+        ElasticProfile elasticProfile = new ElasticProfile("1", elasticPluginId);
+        when(registry.shouldAssignWork(any(), any(), any(), any())).thenReturn(false);
+
+        assertThat(service.shouldAssignWork(agentMetadata, null, elasticProfile), is(false));
+    }
+
+    @Test
+    public void shouldNotAssignJobToAnAgentBroughtUpByADifferentElasticPlugin(){
+        String uuid = UUID.randomUUID().toString();
+        ElasticAgentMetadata agentMetadata = new ElasticAgentMetadata(uuid, uuid, "plugin-1", AgentRuntimeStatus.Idle, AgentConfigStatus.Enabled);
+        ElasticProfile elasticProfile = new ElasticProfile("1", "plugin-2");
+        when(registry.shouldAssignWork(any(), any(), any(), any())).thenReturn(true);
+
+        assertThat(service.shouldAssignWork(agentMetadata, null, elasticProfile), is(false));
     }
 
     private JobPlan plan(int jobId, String pluginId) {
